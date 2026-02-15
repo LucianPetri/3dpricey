@@ -7,11 +7,12 @@
 # See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
 stages:
 - dev
+- test
 - staging
 - cleanup
 - secret-detection
 sast:
-  stage: staging
+  stage: test
 include:
 - template: Auto-DevOps.gitlab-ci.yml
 variables:
