@@ -5,8 +5,6 @@
  * This is proprietary software. All rights reserved.
  */
 
-import { SYSTEM_CONFIG } from "./core/core-system";
-
 export const PROPRIETARY_LICENSE_TEXT = `3DPricey - Proprietary Software
 
 Copyright © 2025 Printel. All rights reserved.
@@ -17,4 +15,4 @@ legal action.
 
 For licensing inquiries, please contact Printel.`;
 
-export const GITHUB_URL = "https://github.com/Printel/3DPricey.git";
+export const GITHUB_URL = "https://git.xaiko.cloud/xaiko/3dpricey";
