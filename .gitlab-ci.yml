@@ -5,7 +5,7 @@ stages:
 variables:
   DOCKER_TLS_CERTDIR: ""
   DOCKER_DRIVER: overlay2
-  REGISTRY_URL: gitlab:5050
+  REGISTRY_URL: git.xaiko.cloud:5050
   REGISTRY_USER: $CI_PROJECT_USERNAME
   REGISTRY_PASSWORD: $CI_JOB_TOKEN
   SSH_USER: ${SSH_USER:-deploy}
@@ -25,8 +25,8 @@ build_images:
     - name: docker:24.0.7-dind
       command: ["--mtu=1460"]
   variables:
-    REGISTRY_URL: "gitlab:5050"
-    REGISTRY_IMAGE: "gitlab:5050/xaiko/3dpricey"
+    REGISTRY_URL: "git.xaiko.cloud:5050"
+    REGISTRY_IMAGE: "git.xaiko.cloud:5050/xaiko/3dpricey"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "dev"
@@ -75,7 +75,7 @@ build_images:
       ssh "$SSH_USER@$DEPLOY_HOST" "cat > /opt/3dpricey/.env.$APP_ENV <<EOF
       APP_ENV=$APP_ENV
       APP_IMAGE_TAG=$APP_IMAGE_TAG
-      REGISTRY_IMAGE=gitlab:5050/xaiko/3dpricey
+      REGISTRY_IMAGE=git.xaiko.cloud:5050/xaiko/3dpricey
 
       DB_USER=$DB_USER
       DB_PASSWORD=$DB_PASSWORD
@@ -109,7 +109,7 @@ build_images:
   script:
     - |
       ssh "$SSH_USER@$DEPLOY_HOST" "
-        echo $REGISTRY_PASSWORD | docker login -u $REGISTRY_USER gitlab:5050 --password-stdin
+        echo $REGISTRY_PASSWORD | docker login -u $REGISTRY_USER git.xaiko.cloud:5050 --password-stdin
         cd /opt/3dpricey
         docker compose --env-file .env.$APP_ENV -f docker-compose.deploy.yml pull
         docker compose --env-file .env.$APP_ENV -f docker-compose.deploy.yml up -d
