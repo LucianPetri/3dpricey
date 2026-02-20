@@ -25,7 +25,7 @@ export const CurrencyProvider = ({ children }: CurrencyProviderProps) => {
                 if (found) return found;
             }
         }
-        return CURRENCIES[0]; // Default to INR
+        return CURRENCIES[2]; // Default to EUR
     });
 
     const setCurrency = (newCurrency: Currency) => {

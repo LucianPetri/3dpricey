@@ -54,18 +54,6 @@ const Settings = () => {
       <header className="border-b border-border glass sticky top-0 z-50 shadow-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-
-            <div className="flex items-center gap-4">
-              <Link to="/" className="hover-lift flex-shrink-0">
-                <img src={SYSTEM_CONFIG.logo} alt={SYSTEM_CONFIG.vendor} width={1024} height={1024} className="h-16 max-w-80 w-auto object-contain" />
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground tracking-tight">Settings & Database</h1>
-                <p className="text-sm text-muted-foreground">
-                  by <a href={SYSTEM_CONFIG.vendorLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">{SYSTEM_CONFIG.vendor}</a> • Manage materials, machines, and constants
-                </p>
-              </div>
-            </div>
             <div className="flex items-center gap-3">
               <Button
                 variant="outline"

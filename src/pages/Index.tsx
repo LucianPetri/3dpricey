@@ -113,26 +113,6 @@ const Index = memo(() => {
                   Settings
                 </Link>
               </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setShowFeedback(true);
-                }}
-                className="h-8 px-3 bg-background hover:bg-muted text-xs sm:text-sm border-input"
-              >
-                Feedback
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowWhatsNew(true)}
-                className="h-8 px-3 bg-background hover:bg-muted text-xs sm:text-sm border-input animate-breathe-yellow"
-              >
-                What's New
-              </Button>
             </div>
           </div>
         </header>
@@ -253,19 +233,6 @@ const Index = memo(() => {
           )}
         </div>
       </main>
-
-
-      {/* Dialogs */}
-      <WhatsNewDialog
-        externalOpen={effectiveShowWhatsNew}
-        onExternalOpenChange={setShowWhatsNew}
-      />
-      <FeedbackDialog
-        open={showFeedback}
-        onOpenChange={setShowFeedback}
-      />
-      <LicenseUpdateAnnouncement onAcknowledge={handleLicenseAcknowledged} />
-      <BrandAnnouncement />
     </div>
   );
 });
