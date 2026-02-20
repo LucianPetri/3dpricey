@@ -2,6 +2,7 @@
  * 3DPricey
  * Copyright (C) 2025 Printel
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useState } from 'react';
 import {

@@ -2,6 +2,7 @@
  * 3DPricey Frontend
  * Copyright (C) 2025 Printel
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
  * Background Sync Service
