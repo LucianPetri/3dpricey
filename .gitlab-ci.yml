@@ -20,26 +20,29 @@ build_images:
   services:
     - name: docker:24.0.7-dind
       command: ["--mtu=1460"]
+  variables:
+    REGISTRY_URL: "gitlab:5050"
+    REGISTRY_IMAGE: "gitlab:5050/xaiko/3dpricey"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "dev"
     - if: $CI_COMMIT_BRANCH == "staging"
     - if: $CI_COMMIT_BRANCH == "main"
   script:
-    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASSWORD" "$REGISTRY_URL"
     - export IMAGE_TAG="$CI_COMMIT_SHORT_SHA"
     - export API_URL="$DEV_VITE_API_URL"
     - if [ "$CI_COMMIT_BRANCH" = "staging" ]; then export API_URL="$STAGING_VITE_API_URL"; fi
     - if [ "$CI_COMMIT_BRANCH" = "main" ]; then export API_URL="$PROD_VITE_API_URL"; fi
-    - docker build -t "$CI_REGISTRY_IMAGE/backend:$IMAGE_TAG" backend
-    - docker build --build-arg VITE_API_URL="$API_URL" -t "$CI_REGISTRY_IMAGE/frontend:$IMAGE_TAG" frontend
+    - docker build -t "$REGISTRY_IMAGE/backend:$IMAGE_TAG" backend
+    - docker build --build-arg VITE_API_URL="$API_URL" -t "$REGISTRY_IMAGE/frontend:$IMAGE_TAG" frontend
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
         echo "MR build only - skipping push."
         exit 0
       fi
-    - docker push "$CI_REGISTRY_IMAGE/backend:$IMAGE_TAG"
-    - docker push "$CI_REGISTRY_IMAGE/frontend:$IMAGE_TAG"
+    - docker push "$REGISTRY_IMAGE/backend:$IMAGE_TAG"
+    - docker push "$REGISTRY_IMAGE/frontend:$IMAGE_TAG"
     - |
       if [ "$CI_COMMIT_BRANCH" = "dev" ]; then
         export ENV_TAG="dev-latest"
@@ -48,10 +51,10 @@ build_images:
       elif [ "$CI_COMMIT_BRANCH" = "main" ]; then
         export ENV_TAG="prod-latest"
       fi
-    - docker tag "$CI_REGISTRY_IMAGE/backend:$IMAGE_TAG" "$CI_REGISTRY_IMAGE/backend:$ENV_TAG"
-    - docker tag "$CI_REGISTRY_IMAGE/frontend:$IMAGE_TAG" "$CI_REGISTRY_IMAGE/frontend:$ENV_TAG"
-    - docker push "$CI_REGISTRY_IMAGE/backend:$ENV_TAG"
-    - docker push "$CI_REGISTRY_IMAGE/frontend:$ENV_TAG"
+    - docker tag "$REGISTRY_IMAGE/backend:$IMAGE_TAG" "$REGISTRY_IMAGE/backend:$ENV_TAG"
+    - docker tag "$REGISTRY_IMAGE/frontend:$IMAGE_TAG" "$REGISTRY_IMAGE/frontend:$ENV_TAG"
+    - docker push "$REGISTRY_IMAGE/backend:$ENV_TAG"
+    - docker push "$REGISTRY_IMAGE/frontend:$ENV_TAG"
 
 .deploy_template:
   stage: deploy
