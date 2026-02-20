@@ -1,139 +1,245 @@
-# 3DPricey Deployment Setup Guide
+# 3DPricey Deployment Setup Guide (Docker Stack)
 
-This guide explains how to set up your deployment environment with SSH access for GitLab CI/CD.
+This guide explains how to deploy 3DPricey with 3 environments (dev, staging, prod) on the same Docker host in the GitLab stack.
 
 ## Prerequisites
 
-- Docker and Docker Compose installed on deployment server
+- Docker and Docker Compose installed on the same host as GitLab/Runner
+- All services on the same Docker network
 - Git access to the repository
 - SSH keypair for CI/CD authentication
 
+## Architecture
+
+All 3 environments run on the same Docker host on a shared network:
+
+```
+GitLab Runner (on network)
+    ↓ SSH port 2222
+3dpricey-dev-ssh (container)      → /opt/3dpricey-dev
+3dpricey-staging-ssh (container)  → /opt/3dpricey-staging  
+3dpricey-prod-ssh (container)     → /opt/3dpricey-prod
+```
+
+Each environment runs its own:
+- PostgreSQL, Redis, MinIO
+- Backend API, Frontend
+- Newt service for Pangolin
+- SSH service for CI/CD access
+
 ## Step 1: Generate SSH Keypair for Deployment
 
-On your **local machine**, generate a keypair for CI/CD deployments:
+On your **local machine**:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/3dpricey_deploy_key -N ""
 ```
 
-This creates:
-- `~/.ssh/3dpricey_deploy_key` (private key - for GitLab CI/CD)
-- `~/.ssh/3dpricey_deploy_key.pub` (public key - for server)
+Creates:
+- `~/.ssh/3dpricey_deploy_key` (private key)
+- `~/.ssh/3dpricey_deploy_key.pub` (public key)
 
-## Step 2: Prepare Authorized Keys on Deployment Server
+## Step 2: Prepare Directories on Docker Host
 
-On your **deployment server**, create the SSH authorized_keys file:
-
-```bash
-mkdir -p /opt/3dpricey
-cat ~/.ssh/3dpricey_deploy_key.pub >> /opt/3dpricey/ssh_authorized_keys
-chmod 600 /opt/3dpricey/ssh_authorized_keys
-chmod 700 /opt/3dpricey
-```
-
-## Step 3: Start Services with SSH Access
-
-On your **deployment server**, run docker-compose:
+On the **deployment host** (same machine where GitLab/Runner run):
 
 ```bash
-cd /opt/3dpricey
-export APP_ENV=prod  # or dev, staging
-export DB_USER=postgres
-export DB_PASSWORD=your_secure_password
-# ... set all env vars from .env file ...
+# Create directories for each environment
+for env in dev staging prod; do
+  mkdir -p /opt/3dpricey-$env
+  chmod 755 /opt/3dpricey-$env
+done
 
-docker-compose --env-file .env.prod -f docker-compose.deploy.yml up -d ssh
+# Create shared SSH authorized_keys
+for env in dev staging prod; do
+  mkdir -p /opt/3dpricey-$env/ssh_authorized_keys_dir
+  cat ~/.ssh/3dpricey_deploy_key.pub > /opt/3dpricey-$env/ssh_authorized_keys_dir/authorized_keys
+  chmod 600 /opt/3dpricey-$env/ssh_authorized_keys_dir/authorized_keys
+done
 ```
 
-The SSH service will be available on port 2222.
+## Step 3: Copy docker-compose.deploy.yml
 
-## Step 4: Configure GitLab CI/CD Variables
+```bash
+for env in dev staging prod; do
+  cp docker-compose.deploy.yml /opt/3dpricey-$env/
+done
+```
 
-In **GitLab → Project → Settings → CI/CD → Variables**, add:
+## Step 4: Create .env Files for Each Environment
 
+Create `/opt/3dpricey-dev/.env.dev`:
+
+```bash
+APP_ENV=dev
+DB_USER=postgres
+DB_PASSWORD=dev_secure_password_here
+JWT_SECRET=dev_jwt_secret_min_32_chars_long_here_12345
+JWT_EXPIRY=7d
+REFRESH_TOKEN_EXPIRY=30d
+API_PORT=3001
+NODE_ENV=production
+FRONTEND_URL=https://dev.printel.ro
+REDIS_URL=redis://redis:6379
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_ENDPOINT=minio:9000
+MINIO_BUCKET=3dpricey
+MINIO_REGION=us-east-1
+MINIO_PUBLIC_URL=https://dev.printel.ro/storage
+MINIO_USE_SSL=false
+VITE_API_URL=https://dev.printel.ro/api
+PANGOLIN_ENDPOINT=https://app.pangolin.net
+NEWT_ID=dev_newt_id_from_pangolin
+NEWT_SECRET=dev_newt_secret_from_pangolin
+PANGOLIN_BLUEPRINT_FILE=/blueprints/3dpricey-dev.yml
+```
+
+Repeat for staging and prod, updating `DEV_` → `STAGING_` → `PROD_` and URLs.
+
+## Step 5: Start All 3 Environments
+
+```bash
+# Dev
+cd /opt/3dpricey-dev
+docker compose --env-file .env.dev -f docker-compose.deploy.yml up -d
+
+# Staging
+cd /opt/3dpricey-staging
+docker compose --env-file .env.staging -f docker-compose.deploy.yml up -d
+
+# Prod
+cd /opt/3dpricey-prod
+docker compose --env-file .env.prod -f docker-compose.deploy.yml up -d
+```
+
+Verify all containers are running:
+
+```bash
+docker ps | grep 3dpricey
+```
+
+Should see 18 containers total (6 per environment × 3 envs).
+
+## Step 6: Configure GitLab CI/CD Variables
+
+In **GitLab → Project → Settings → CI/CD → Variables**, add these **protected variables**:
+
+### Global Variables
 ```
 SSH_PRIVATE_KEY = (content of ~/.ssh/3dpricey_deploy_key)
-PROD_HOST = your-prod-server.com
 SSH_USER = deploy
 ```
 
-For each environment (dev, staging, prod), also add:
-
+### Dev Environment
 ```
-DEV_HOST = dev-server-hostname
 DEV_DB_USER = postgres
-DEV_DB_PASSWORD = secure_password
-DEV_JWT_SECRET = (min 32 random chars)
+DEV_DB_PASSWORD = dev_secure_password_here
+DEV_JWT_SECRET = dev_jwt_secret_min_32_chars_long_here_12345
 DEV_MINIO_ACCESS_KEY = minioadmin
 DEV_MINIO_SECRET_KEY = minioadmin
 DEV_MINIO_BUCKET = 3dpricey
 DEV_MINIO_PUBLIC_URL = https://dev.printel.ro/storage
 DEV_PANGOLIN_ENDPOINT = https://app.pangolin.net
-DEV_NEWT_ID = your-newt-id
-DEV_NEWT_SECRET = your-newt-secret
-
-# Repeat for STAGING_* and PROD_*
+DEV_NEWT_ID = dev_newt_id_from_pangolin
+DEV_NEWT_SECRET = dev_newt_secret_from_pangolin
 ```
 
-## Step 5: Test SSH Connection
+### Staging & Prod
+(Same as dev, replace `DEV_` with `STAGING_` or `PROD_`, update URLs)
 
-From GitLab runner, verify SSH works:
+## Step 7: Test Deployment
+
+Commit and push to test the pipeline:
 
 ```bash
-ssh -p 2222 -i ~/.ssh/3dpricey_deploy_key deploy@DEPLOY_HOST "echo 'SSH works!'"
+git commit --allow-empty -m "test: trigger CI/CD deployment"
+git push origin dev
 ```
 
-## Step 6: Trigger Deployment
+Monitor in **GitLab → CI/CD → Pipelines**.
 
-Push to your branch to trigger CI/CD:
+Once dev deploys successfully:
 
 ```bash
-git commit --allow-empty -m "Trigger CI/CD deployment"
+git push origin staging
 git push origin main
 ```
-
-Monitor deployment in GitLab → CI/CD → Pipelines.
-
-## SSH Service Details
-
-The SSH service in `docker-compose.deploy.yml`:
-- **Port**: 2222 (maps to container port 22)
-- **User**: `deploy` (created by linuxserver/openssh-server)
-- **Key Auth**: Uses `/home/deploy/.ssh/authorized_keys`
-- **Volume Mounts**:
-  - `/opt/3dpricey` → allows git clone and docker-compose commands
-  - `/var/run/docker.sock` → allows docker commands from SSH session
 
 ## Troubleshooting
 
 ### SSH Connection Refused
 
-1. Check SSH service is running:
-   ```bash
-   docker ps | grep ssh
-   ```
+SSH into the host and check:
 
-2. Check port 2222 is exposed:
-   ```bash
-   netstat -tlnp | grep 2222
-   ```
+```bash
+docker ps | grep ssh
+netstat -tlnp | grep 2222  # Should be listening
+docker logs 3dpricey-dev-ssh  # Check SSH service logs
+```
 
-3. Check authorized_keys has correct permissions (600):
-   ```bash
-   ls -la /opt/3dpricey/ssh_authorized_keys
-   ```
+### Git Clone Fails
 
-### Git Clone Failures
+The SSH containers need internet access to clone from git.xaiko.cloud. Check:
 
-Ensure git credentials are configured on the SSH service, or use a read-only deploy token from GitLab.
+```bash
+docker exec 3dpricey-dev-ssh ping git.xaiko.cloud
+```
 
-### Docker Command Not Found
+### Docker Compose Up Fails
 
-SSH service needs `/var/run/docker.sock` mounted. Verify in docker-compose.deploy.yml.
+Check if all images can be pulled:
 
-## Security Notes
+```bash
+cd /opt/3dpricey-dev
+docker compose --env-file .env.dev -f docker-compose.deploy.yml pull
+```
 
-- Keep `SSH_PRIVATE_KEY` secret in GitLab
-- Rotate deployment keys regularly
-- Use separate deploy user (not root)
-- Restrict SSH access to known CI/CD IPs if possible
+### Volumes/Permissions Issues
+
+Ensure directories are writable:
+
+```bash
+ls -la /opt/3dpricey-*/
+# Should see drwxr-xr-x (755)
+
+docker exec 3dpricey-dev-postgres ls -la /var/lib/postgresql/data | head
+# Should show postgres can write
+```
+
+## Accessing Services
+
+Once deployed:
+
+- **Dev Frontend:** https://dev.printel.ro (via Newt/Pangolin)
+- **Dev API:** https://dev.printel.ro/api
+- **Staging:** https://staging.printel.ro
+- **Prod:** https://printel.ro
+
+Check container status:
+
+```bash
+docker inspect 3dpricey-dev-postgres
+docker logs 3dpricey-dev-backend
+```
+
+## Cleanup
+
+To stop all environments:
+
+```bash
+for env in dev staging prod; do
+  cd /opt/3dpricey-$env
+  docker compose -f docker-compose.deploy.yml down
+done
+```
+
+To remove volumes (WARNING: deletes data):
+
+```bash
+for env in dev staging prod; do
+  cd /opt/3dpricey-$env
+  docker compose -f docker-compose.deploy.yml down -v
+done
+```
+

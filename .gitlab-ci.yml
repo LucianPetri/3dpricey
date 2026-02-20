@@ -35,13 +35,13 @@ validate_code:
     - mkdir -p ~/.ssh
     - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -p 2222 -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-    - ssh -p 2222 "$SSH_USER@$DEPLOY_HOST" "mkdir -p /opt/3dpricey"
+    - ssh-keyscan -p 2222 -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+    - ssh -p 2222 "$SSH_USER@$DEPLOY_HOST" "mkdir -p /opt/3dpricey-$APP_ENV" 2>/dev/null || true
   script:
     - |
       ssh -p 2222 "$SSH_USER@$DEPLOY_HOST" "
-        cd /opt/3dpricey
-        git clone --depth=1 --branch=$CI_COMMIT_BRANCH https://git.xaiko.cloud/xaiko/3dpricey.git . || git -C . pull
+        cd /opt/3dpricey-$APP_ENV
+        git clone --depth=1 --branch=$CI_COMMIT_BRANCH https://git.xaiko.cloud/xaiko/3dpricey.git . 2>/dev/null || git -C . pull
         cat > .env.$APP_ENV <<EOF
       APP_ENV=$APP_ENV
       DB_USER=$DB_USER
@@ -78,7 +78,7 @@ deploy_dev:
   rules:
     - if: $CI_COMMIT_BRANCH == "dev"
   variables:
-    DEPLOY_HOST: $DEV_HOST
+    DEPLOY_HOST: 3dpricey-dev-ssh
     APP_ENV: dev
     DB_USER: $DEV_DB_USER
     DB_PASSWORD: $DEV_DB_PASSWORD
@@ -104,7 +104,7 @@ deploy_staging:
   rules:
     - if: $CI_COMMIT_BRANCH == "staging"
   variables:
-    DEPLOY_HOST: $STAGING_HOST
+    DEPLOY_HOST: 3dpricey-staging-ssh
     APP_ENV: staging
     DB_USER: $STAGING_DB_USER
     DB_PASSWORD: $STAGING_DB_PASSWORD
@@ -130,7 +130,7 @@ deploy_prod:
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
   variables:
-    DEPLOY_HOST: $PROD_HOST
+    DEPLOY_HOST: 3dpricey-prod-ssh
     APP_ENV: prod
     DB_USER: $PROD_DB_USER
     DB_PASSWORD: $PROD_DB_PASSWORD
