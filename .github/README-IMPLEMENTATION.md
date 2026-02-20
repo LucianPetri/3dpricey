@@ -60,7 +60,7 @@ Before starting Phase 1, ensure:
 ✅ Express.js API framework  
 ✅ User authentication (JWT)  
 ✅ Remove localStorage dependency  
-✅ Brand name: "PolymagicPrice" → "3DPricey"  
+✅ Brand name: "3DPricey" → "3DPricey"  
 ✅ Kill printer connection feature (will re-add Phase 3)
 
 ### Step 1: Rebranding (Day 1)
@@ -68,17 +68,17 @@ Before starting Phase 1, ensure:
 **Search & Replace Across Codebase:**
 ```bash
 # Find all references
-grep -r "PolymagicPrice" --include="*.ts" --include="*.tsx" --include="*.json" .
+grep -r "3DPricey" --include="*.ts" --include="*.tsx" --include="*.json" .
 
 # Replace programmatically (Mac)
 find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.json" -o -name "*.md" \) \
-  -exec sed -i '' 's/PolymagicPrice/3DPricey/g' {} +
+  -exec sed -i '' 's/3DPricey/3DPricey/g' {} +
 
 # Update branding constants
 # Edit: src/lib/constants.ts
   APP_NAME = '3DPricey'
   APP_VERSION = '2.0.0'
-  GITHUB_REPO = 'https://github.com/RPHobbyist/3DPricey'
+  GITHUB_REPO = 'https://github.com/Printel/3DPricey'
 ```
 
 **Files to Update:**
@@ -92,12 +92,12 @@ find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.json" -o -name "*.md
 
 **Verification:**
 ```bash
-grep -r "PolymagicPrice" . --exclude-dir=node_modules # Should be 0 results
+grep -r "3DPricey" . --exclude-dir=node_modules # Should be 0 results
 grep -r "3DPricey" . --exclude-dir=node_modules | wc -l # Should be >20
 ```
 
 **Update .github/copilot-instructions.md:**
-Change references from "PolymagicPrice" to "3DPricey" in the main guide.
+Change references from "3DPricey" to "3DPricey" in the main guide.
 
 ### Step 2: Backend Setup (Days 2-5)
 
@@ -314,7 +314,7 @@ Create migration script:
 - Verify integrity
 
 ### Phase 1 Completion Checklist
-- [ ] All "PolymagicPrice" → "3DPricey" rebranded
+- [ ] All "3DPricey" → "3DPricey" rebranded
 - [ ] Express API running
 - [ ] PostgreSQL seeded with defaults
 - [ ] User auth working (login/register)
@@ -525,7 +525,7 @@ Similar to Phase 1, plus:
 | Data persistence | STORAGE.md (Phase 1 replaces this) |
 
 **Quick links:**
-- GitHub: https://github.com/RPHobbyist/3DPricey
+- GitHub: https://github.com/Printel/3DPricey
 - Dev server: http://localhost:8080 (Phase 0)
 - API server: http://localhost:3001 (Phase 1+)
 

@@ -2,7 +2,7 @@
 
 ## Architecture
 
-PolymagicPrice uses **Context API + custom hooks** for global state. This approach trades complexity for simplicity—no Redux/Zustand overhead.
+3DPricey uses **Context API + custom hooks** for global state. This approach trades complexity for simplicity—no Redux/Zustand overhead.
 
 **Key Principle:** Context stores data, hooks + localStorage persist it.
 

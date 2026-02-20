@@ -5,7 +5,7 @@
 - Multi-user quotes
 - PWA + background sync
 - Conflict resolution
-- Branding: PolymagicPrice → 3DPricey
+- Branding: 3DPricey → 3DPricey
 - Remove printer connection (re-add Phase 3)
 ## Phase 2: Multi-Color Filament
 Deps: Phase 1
@@ -27,7 +27,7 @@ Types: FDM, Resin, Laser, Embroidery
 `package.json`: productName="3DPricey"
 `index.html`: <title>3DPricey</title>
 `src/lib/constants.ts`: APP_NAME='3DPricey'
-All .ts/.tsx: PolymagicPrice → 3DPricey
+All .ts/.tsx: 3DPricey → 3DPricey
 All .md files: update names
 ---
 ## Phase 1 Structure

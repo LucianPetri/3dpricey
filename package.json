@@ -1,11 +1,11 @@
 {
-  "name": "polymagicprice",
-  "productName": "PolymagicPrice",
+  "name": "3dpricey",
+  "productName": "3DPricey",
   "description": "A 3D printing cost calculation tool.",
-  "author": "Rp Hobbyist <rphobbyist@gmail.com>",
-  "license": "AGPL-3.0",
+  "author": "Printel",
+  "license": "Proprietary",
   "private": true,
-  "version": "1.3.1",
+  "version": "2.0.0",
   "main": "dist-electron/main.cjs",
   "type": "module",
   "scripts": {
@@ -80,8 +80,8 @@
     "zod": "^3.25.76"
   },
   "build": {
-    "appId": "com.polymagicprice.app",
-    "productName": "PolymagicPrice",
+    "appId": "com.3dpricey.app",
+    "productName": "3DPricey",
     "directories": {
       "output": "release"
     },
@@ -93,10 +93,10 @@
     "win": {
       "target": "nsis",
       "icon": "dist/logo.ico",
-      "legalTrademarks": "PolymagicPrice",
+      "legalTrademarks": "3DPricey",
       "verifyUpdateCodeSignature": false
     },
-    "copyright": "Copyright © 2026 Rp Hobbyist"
+    "copyright": "Copyright © 2025 Printel"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

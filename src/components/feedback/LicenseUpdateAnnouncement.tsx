@@ -1,18 +1,7 @@
 /*
- * PolymagicPrice
- * Copyright (C) 2025 Rp Hobbyist
+ * 3DPricey
+ * Copyright (C) 2025 Printel
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published
- * by the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
@@ -63,7 +52,7 @@ export const LicenseUpdateAnnouncement = ({ onAcknowledge }: { onAcknowledge: ()
                             We have updated our license to the <strong>GNU Affero General Public License v3 (AGPLv3)</strong>.
                         </p>
                         <p className="mb-4 text-justify">
-                            This change ensures that PolymagicPrice remains open and free forever.
+                            This change ensures that 3DPricey remains open and free forever.
                             It guarantees that anyone who builds upon this project, whether as a downloadable tool or a web service, must also share their improvements with the community.
                         </p>
                         <p className="text-sm text-muted-foreground">

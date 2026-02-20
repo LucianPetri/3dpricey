@@ -1,6 +1,6 @@
-# PolymagicPrice: Developer Guide for AI Agents
+# 3DPricey: Developer Guide for AI Agents
 
-**Project:** PolymagicPrice – A 3D printing cost calculator and quote management tool  
+**Project:** 3DPricey – A 3D printing cost calculator and quote management tool  
 **Tech Stack:** React 18 + TypeScript + Vite + Tailwind CSS + Shadcn UI  
 **License:** AGPL-3.0  
 

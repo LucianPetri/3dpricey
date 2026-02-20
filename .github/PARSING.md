@@ -1,7 +1,7 @@
 # File Parsing System
 
 ## Overview
-PolymagicPrice auto-extracts print parameters from 3D model files, eliminating manual entry. Three file formats are supported with fallback patterns for different slicer outputs.
+3DPricey auto-extracts print parameters from 3D model files, eliminating manual entry. Three file formats are supported with fallback patterns for different slicer outputs.
 
 **Location:** [src/lib/parsers/](../src/lib/parsers/)
 

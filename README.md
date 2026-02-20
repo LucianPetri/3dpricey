@@ -1,8 +1,6 @@
-# PolymagicPrice
+# 3DPricey
 
-A professional, open-source 3D printing price calculator and quote management tool by **Rp Hobbyist**. **PolymagicPrice** allows users to calculate costs for both FDM and Resin printing, manage materials and machines, and track quotes.
-
-🔗 **[Visit Rp Hobbyist](https://linktr.ee/RPHobbyist)**
+A professional 3D printing price calculator and quote management tool by **Printel**. **3DPricey** allows users to calculate costs for both FDM and Resin printing, manage materials and machines, and track quotes.
 
 ## Features
 
@@ -17,14 +15,12 @@ A professional, open-source 3D printing price calculator and quote management to
 
 ## License
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+This project is proprietary software owned by Printel. All rights reserved.
 
-This project is open source and available under the **GNU Affero General Public License v3 (AGPLv3)**.
+Unauthorized copying, modification, or distribution is prohibited.
 
-You are free to use, modify, and distribute this software, but **if you run a modified version as a network service, you must release your source code to the community**.
-
-See the `LICENSE` file for more information.
+For licensing inquiries, please contact Printel.
 
 ---
 
-Made by Rp Hobbyist
+Made by Printel

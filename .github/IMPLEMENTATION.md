@@ -4,10 +4,10 @@
 - package.json: productName → "3DPricey", version → "2.0.0"
 - index.html: <title> → "3DPricey", favicon update
 - src/lib/constants.ts: APP_NAME, APP_VERSION, COMPANY_NAME
-- All .ts/.tsx files: search/replace PolymagicPrice → 3DPricey
+- All .ts/.tsx files: search/replace 3DPricey → 3DPricey
 - All .md files: project name update
 - vite.config.ts: app name in config
-- Git commit: "Rebrand: PolymagicPrice → 3DPricey"
+- Git commit: "Rebrand: 3DPricey → 3DPricey"
 
 ## Days 4-6: Backend Scaffold
 ```bash

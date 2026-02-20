@@ -1,18 +1,7 @@
 /*
- * PolymagicPrice
- * Copyright (C) 2025 Rp Hobbyist
+ * 3DPricey
+ * Copyright (C) 2025 Printel
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published
- * by the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
@@ -52,7 +41,7 @@ const PageLoader = () => (
           </div>
         </div>
         <div className="text-center space-y-2">
-          <h2 className="text-xl font-bold tracking-tight text-foreground/80">PolymagicPrice</h2>
+          <h2 className="text-xl font-bold tracking-tight text-foreground/80">3DPricey</h2>
           <div className="flex gap-1 justify-center">
             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]" />
             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]" />

@@ -1,18 +1,7 @@
 /*
- * PolymagicPrice
- * Copyright (C) 2025 Rp Hobbyist
+ * 3DPricey
+ * Copyright (C) 2025 Printel
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published
- * by the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
@@ -60,7 +49,7 @@ export const BrandAnnouncement = () => {
                             <div className="relative z-10 flex flex-col items-center">
                                 <span className="text-primary-foreground/80 text-xs font-bold uppercase tracking-[0.2em] mb-1">New Identity</span>
                                 <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tighter drop-shadow-md">
-                                    PolymagicPrice
+                                    3DPricey
                                 </h1>
                             </div>
                         </div>
@@ -68,10 +57,10 @@ export const BrandAnnouncement = () => {
                         <div className="p-8">
                             <DialogHeader>
                                 <DialogTitle className="text-2xl font-bold text-center mb-4">
-                                    Welcome to PolymagicPrice
+                                    Welcome to 3DPricey
                                 </DialogTitle>
                                 <DialogDescription className="text-lg text-center leading-relaxed">
-                                    We've rebranded! <span className="font-bold animate-rainbow-shimmer text-xl">PolymagicPrice</span> is the same powerful tool you love, but with a new name that reflects our commitment to making 3D print estimation feel like magic.
+                                    We've rebranded! <span className="font-bold animate-rainbow-shimmer text-xl">3DPricey</span> is the same powerful tool you love, but with a new name that reflects our commitment to making 3D print estimation feel like magic.
                                 </DialogDescription>
                             </DialogHeader>
 
