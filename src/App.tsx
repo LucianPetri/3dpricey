@@ -15,6 +15,7 @@ import { HashRouter, Routes, Route } from "react-router-dom";
 import { BatchQuoteProvider } from "@/contexts/BatchQuoteProvider";
 import { ProductionProvider } from "@/contexts/ProductionProvider";
 import { CurrencyProvider } from "@/components/shared/CurrencyProvider";
+import { ThemeProvider } from "@/contexts/ThemeProvider";
 import { useAppProtection } from "@/hooks/useAppProtection";
 import OrderManagement from "./pages/OrderManagement";
 import Layout from "./components/layout/Layout";
@@ -76,33 +77,35 @@ const App = () => {
   // useAppProtection();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <CurrencyProvider>
-          <BatchQuoteProvider>
-            <ProductionProvider>
-              <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <Suspense fallback={<PageLoader />}>
-                  <Routes>
-                    <Route element={<Layout />}>
-                      <Route path="/" element={<Index />} />
-                      <Route path="/settings" element={<Settings />} />
-                    </Route>
-                    <Route path="/saved-quotes" element={<SavedQuotes />} />
-                    <Route path="/order-management" element={<OrderManagement />} />
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <CurrencyProvider>
+            <BatchQuoteProvider>
+              <ProductionProvider>
+                <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                  <Suspense fallback={<PageLoader />}>
+                    <Routes>
+                      <Route element={<Layout />}>
+                        <Route path="/" element={<Index />} />
+                        <Route path="/settings" element={<Settings />} />
+                      </Route>
+                      <Route path="/saved-quotes" element={<SavedQuotes />} />
+                      <Route path="/order-management" element={<OrderManagement />} />
 
-                    <Route path="/print-management" element={<PrintManagement />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </Suspense>
-              </HashRouter>
-            </ProductionProvider>
-          </BatchQuoteProvider>
-        </CurrencyProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+                      <Route path="/print-management" element={<PrintManagement />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </Suspense>
+                </HashRouter>
+              </ProductionProvider>
+            </BatchQuoteProvider>
+          </CurrencyProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 
 };

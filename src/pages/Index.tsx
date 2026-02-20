@@ -16,6 +16,7 @@ import QuoteSummary from "@/components/quotes/QuoteSummary";
 import { useNavigate, Link } from "react-router-dom";
 import { SYSTEM_CONFIG } from "@/lib/core/core-system";
 import { CurrencySelector } from "@/components/shared/CurrencySelector";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { QuoteData } from "@/types/quote";
 import { useSavedQuotes } from "@/hooks/useSavedQuotes";
 import { useBatchQuote } from "@/hooks/useBatchQuote";
@@ -106,6 +107,8 @@ const Index = memo(() => {
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
               <CurrencySelector />
+
+              <ThemeToggle />
 
               <Button
                 variant="outline"
