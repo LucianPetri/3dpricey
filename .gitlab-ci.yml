@@ -1,21 +1,3 @@
-spec:
-  inputs:
-    registry_user:
-      description: "GitLab registry username"
-      default: $CI_PROJECT_USERNAME
-    registry_password:
-      description: "GitLab registry password or token"
-      default: $CI_JOB_TOKEN
-    dev_host:
-      description: "Dev deployment host"
-    staging_host:
-      description: "Staging deployment host"
-    prod_host:
-      description: "Prod deployment host"
-    ssh_user:
-      description: "SSH user for deployments"
-      default: "deploy"
-
 stages:
   - build
   - deploy
@@ -23,12 +5,10 @@ stages:
 variables:
   DOCKER_TLS_CERTDIR: ""
   DOCKER_DRIVER: overlay2
-  REGISTRY_USER: $[[ inputs.registry_user ]]
-  REGISTRY_PASSWORD: $[[ inputs.registry_password ]]
-  DEV_HOST: $[[ inputs.dev_host ]]
-  STAGING_HOST: $[[ inputs.staging_host ]]
-  PROD_HOST: $[[ inputs.prod_host ]]
-  SSH_USER: $[[ inputs.ssh_user ]]
+  REGISTRY_URL: gitlab:5050
+  REGISTRY_USER: $CI_PROJECT_USERNAME
+  REGISTRY_PASSWORD: $CI_JOB_TOKEN
+  SSH_USER: ${SSH_USER:-deploy}
 
 workflow:
   rules:
