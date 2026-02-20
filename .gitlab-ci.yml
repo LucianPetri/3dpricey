@@ -1,3 +1,21 @@
+spec:
+  inputs:
+    registry_user:
+      description: "GitLab registry username"
+      default: $CI_PROJECT_USERNAME
+    registry_password:
+      description: "GitLab registry password or token"
+      default: $CI_JOB_TOKEN
+    dev_host:
+      description: "Dev deployment host"
+    staging_host:
+      description: "Staging deployment host"
+    prod_host:
+      description: "Prod deployment host"
+    ssh_user:
+      description: "SSH user for deployments"
+      default: "deploy"
+
 stages:
   - build
   - deploy
@@ -5,6 +23,12 @@ stages:
 variables:
   DOCKER_TLS_CERTDIR: ""
   DOCKER_DRIVER: overlay2
+  REGISTRY_USER: $[[ inputs.registry_user ]]
+  REGISTRY_PASSWORD: $[[ inputs.registry_password ]]
+  DEV_HOST: $[[ inputs.dev_host ]]
+  STAGING_HOST: $[[ inputs.staging_host ]]
+  PROD_HOST: $[[ inputs.prod_host ]]
+  SSH_USER: $[[ inputs.ssh_user ]]
 
 workflow:
   rules:
@@ -71,7 +95,7 @@ build_images:
       ssh "$SSH_USER@$DEPLOY_HOST" "cat > /opt/3dpricey/.env.$APP_ENV <<EOF
       APP_ENV=$APP_ENV
       APP_IMAGE_TAG=$APP_IMAGE_TAG
-      REGISTRY_IMAGE=$CI_REGISTRY_IMAGE
+      REGISTRY_IMAGE=gitlab:5050/xaiko/3dpricey
 
       DB_USER=$DB_USER
       DB_PASSWORD=$DB_PASSWORD
@@ -105,7 +129,7 @@ build_images:
   script:
     - |
       ssh "$SSH_USER@$DEPLOY_HOST" "
-        echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
+        echo $REGISTRY_PASSWORD | docker login -u $REGISTRY_USER gitlab:5050 --password-stdin
         cd /opt/3dpricey
         docker compose --env-file .env.$APP_ENV -f docker-compose.deploy.yml pull
         docker compose --env-file .env.$APP_ENV -f docker-compose.deploy.yml up -d
