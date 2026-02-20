@@ -109,6 +109,7 @@ interface KanbanContextType {
 ### 4. CurrencyContext
 **File:** [src/contexts/CurrencyContext.ts](../src/contexts/CurrencyContext.ts)  
 **Purpose:** Global currency selection (USD, EUR, GBP, etc.)
+**Options:** Currency list is maintained in [src/types/currency.ts](../src/types/currency.ts) and grouped by region (major/common currencies).
 
 **Type:**
 ```typescript

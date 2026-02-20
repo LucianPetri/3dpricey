@@ -16,7 +16,6 @@ import { BatchQuoteProvider } from "@/contexts/BatchQuoteProvider";
 import { ProductionProvider } from "@/contexts/ProductionProvider";
 import { CurrencyProvider } from "@/components/shared/CurrencyProvider";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
-import { useAppProtection } from "@/hooks/useAppProtection";
 import OrderManagement from "./pages/OrderManagement";
 import Layout from "./components/layout/Layout";
 
@@ -49,12 +48,6 @@ const PageLoader = () => (
             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" />
           </div>
         </div>
-      </div>
-
-      {/* Privacy Guarantee during load */}
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50 border border-border/50 text-[10px] text-muted-foreground animate-pulse-soft">
-        <ShieldCheck className="w-3 h-3 text-success" />
-        <span>Secure Local Processing</span>
       </div>
     </div>
   </div>

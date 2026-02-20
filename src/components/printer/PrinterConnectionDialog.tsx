@@ -5,7 +5,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,7 +64,7 @@ export function PrinterConnectionDialog({ open, onOpenChange, onConnected }: Pri
         setLoading(true);
         try {
             const devices = await window.electronAPI.bambu.getDevices();
-            setCloudDevices(devices);
+            setCloudDevices(devices as BambuDevice[]);
         } catch (error) {
             const err = error as Error;
             toast.error('Failed to fetch devices: ' + err.message);
