@@ -119,6 +119,7 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 - **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml)
 - **CI/CD:** GitLab pipeline in [.gitlab-ci.yml](../.gitlab-ci.yml)
 - **Ingress:** Pangolin Newt with blueprints in [deploy/blueprints/](../deploy/blueprints/)
+- **Env per site:** CI writes a per-environment `.env` on each host with Newt ID/secret and blueprint path
 
 **5. Pages & Routing** ([src/pages/](src/pages/), [HashRouter](src/App.tsx))
 - **Index.tsx:** Quote calculator dashboard
