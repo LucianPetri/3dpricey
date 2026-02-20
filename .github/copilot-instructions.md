@@ -116,10 +116,35 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 
 **5. Backend & Deployment**
 - **Backend:** Express + Prisma in [backend/](../backend/)
-- **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml)
-- **CI/CD:** GitLab pipeline in [.gitlab-ci.yml](../.gitlab-ci.yml)
+- **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml) (local dev) and [deploy/docker-compose.deploy.yml](../deploy/docker-compose.deploy.yml) (production)
+- **CI/CD:** GitLab pipeline with 2 stages: validate (lint frontend) + deploy (SSH to servers)
+- **Pipeline:** [.gitlab-ci.yml](../.gitlab-ci.yml) - runs on `merge_request_event`, `dev`, `staging`, `main` branches
+- **SSH Service:** OpenSSH server in docker-compose for CI/CD access (port 2222)
 - **Ingress:** Pangolin Newt with blueprints in [deploy/blueprints/](../deploy/blueprints/)
-- **Env per site:** CI writes a per-environment `.env` on each host with Newt ID/secret and blueprint path
+- **Env per site:** CI writes a per-environment `.env.$APP_ENV` on each host with Newt ID/secret and blueprint path
+- **Setup Guide:** [deploy/DEPLOYMENT-SETUP.md](../deploy/DEPLOYMENT-SETUP.md) - SSH keypair generation, authorized_keys setup, GitLab variables
+
+### CI/CD Pipeline Flow
+
+1. **validate_code** (runs on all branches)
+   - Image: `node:20-alpine`
+   - Runs `npm ci && npm run lint` in frontend/
+   - Fails if ESLint errors exist
+
+2. **deploy_dev/staging/prod** (runs only on `dev`, `staging`, `main` branches)
+   - Image: `alpine:3.19`
+   - SSH to deployment server using private key
+   - Clone latest code from GitLab
+   - Generate `.env.$APP_ENV` with secrets
+   - Run `docker compose --env-file .env.$APP_ENV -f docker-compose.deploy.yml build && up -d`
+
+**SSH Access Pattern:**
+```
+GitLab Runner (Alpine) 
+  --SSH port 2222--> Deployment Server 
+    --Docker CLI via socket--> Docker Daemon 
+      --compose--> Services (postgres, redis, minio, backend, frontend, newt, ssh)
+```
 
 **5. Pages & Routing** ([src/pages/](src/pages/), [HashRouter](src/App.tsx))
 - **Index.tsx:** Quote calculator dashboard

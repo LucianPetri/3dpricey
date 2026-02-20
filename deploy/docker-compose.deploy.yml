@@ -108,6 +108,26 @@ services:
       - 3dpricey-network
     restart: unless-stopped
 
+  # SSH access for CI/CD deployments
+  ssh:
+    image: linuxserver/openssh-server:latest
+    container_name: 3dpricey-${APP_ENV}-ssh
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: UTC
+      SUDO_ACCESS: "false"
+      USER_NAME: deploy
+    ports:
+      - "2222:2222"
+    volumes:
+      - ./ssh_authorized_keys:/home/deploy/.ssh/authorized_keys:ro
+      - /opt/3dpricey:/opt/3dpricey
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - 3dpricey-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local
