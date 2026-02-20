@@ -14,7 +14,6 @@ import FDMCalculatorTable from "@/components/calculator/FDMCalculatorTable";
 import ResinCalculatorTable from "@/components/calculator/ResinCalculatorTable";
 import QuoteSummary from "@/components/quotes/QuoteSummary";
 import { useNavigate, Link } from "react-router-dom";
-import { SYSTEM_CONFIG } from "@/lib/core/core-system";
 import { CurrencySelector } from "@/components/shared/CurrencySelector";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { QuoteData } from "@/types/quote";
@@ -93,24 +92,12 @@ const Index = memo(() => {
       {/* Header */}
       <header className="border-b border-border glass sticky top-0 z-50 shadow-card">
         <div className="container mx-auto px-4 py-2 md:py-3">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-start">
-              <Link to="/" className="hover-lift flex-shrink-0">
-                <img src={SYSTEM_CONFIG.logo} alt={SYSTEM_CONFIG.vendor} width={1024} height={1024} className="h-8 sm:h-10 md:h-12 w-auto object-contain" />
-              </Link>
-              <div className="text-center sm:text-left">
-                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground tracking-tight">{SYSTEM_CONFIG.appName}</h1>
-                <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">
-                  by <a href={SYSTEM_CONFIG.vendorLink} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">{SYSTEM_CONFIG.vendor}</a> • Professional pricing for FDM & Resin
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center">
-              <CurrencySelector />
+          <div className="flex items-center justify-end gap-2 sm:gap-3">
+            <CurrencySelector />
 
-              <ThemeToggle />
+            <ThemeToggle />
 
-              <Button
+            <Button
                 variant="outline"
                 size="sm"
                 onClick={handleReset}
@@ -148,8 +135,7 @@ const Index = memo(() => {
               </Button>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
 
       <main className="container mx-auto px-4 py-8 pb-20 sm:px-6 lg:px-8 max-w-7xl animate-fade-in stagger-1">
