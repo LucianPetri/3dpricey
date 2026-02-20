@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import FDMCalculatorTable from "@/components/calculator/FDMCalculatorTable";
 import ResinCalculatorTable from "@/components/calculator/ResinCalculatorTable";
 import QuoteSummary from "@/components/quotes/QuoteSummary";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { CurrencySelector } from "@/components/shared/CurrencySelector";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { QuoteData } from "@/types/quote";
@@ -28,21 +28,8 @@ const SavedQuotesTable = lazy(() => import("@/components/quotes/SavedQuotesTable
 const QuotesDashboard = lazy(() => import("@/components/dashboard/QuotesDashboard").then(module => ({ default: module.QuotesDashboard })));
 
 const Index = memo(() => {
-  const navigate = useNavigate();
-  // Initialize as false to prevent WhatsNewDialog from checking until we say so
-  const [canShowWhatsNew, setCanShowWhatsNew] = useState<boolean>(false);
-  const [showWhatsNew, setShowWhatsNew] = useState<boolean | undefined>(undefined);
-  const [showFeedback, setShowFeedback] = useState(false);
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
 
-  // Combine the gate with the explicit state
-  // If showWhatsNew is set (true/false), use it.
-  // If showWhatsNew is undefined (auto-mode), use canShowWhatsNew to decide:
-  //   - If canShowWhatsNew is true -> pass undefined (allowed to check)
-  //   - If canShowWhatsNew is false -> pass false (blocked)
-  const effectiveShowWhatsNew = showWhatsNew !== undefined
-    ? showWhatsNew
-    : (canShowWhatsNew ? undefined : false);
 
   const [resetKey, setResetKey] = useState(0);
 
@@ -80,10 +67,6 @@ const Index = memo(() => {
     await duplicateQuote(quote);
   }, [duplicateQuote]);
 
-  const handleLicenseAcknowledged = useCallback(() => {
-    setCanShowWhatsNew(true);
-  }, []);
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Glow effect */}
@@ -111,6 +94,17 @@ const Index = memo(() => {
                 <Link to="/settings">
                   <Settings className="w-3.5 h-3.5 mr-2" />
                   Settings
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild className="h-8 px-3 bg-background hover:bg-muted text-xs sm:text-sm border-input">
+                <Link to="/print-management" >
+                    Print Management
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild className="h-8 px-3 bg-background hover:bg-muted text-xs sm:text-sm border-input">
+                <Link to="/order-management">
+                  <Settings className="w-3.5 h-3.5 mr-2" />
+                  Order Management
                 </Link>
               </Button>
             </div>

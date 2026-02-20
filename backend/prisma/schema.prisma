@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("user")
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  quotes    Quote[]
+  materials Material[]
+  machines  Machine[]
+  apiKeys   ApiKey[]
+}
+
+model Company {
+  id        String          @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  taxId     String?
+  website   String?
+  logoUrl   String?
+  users     User[]
+  quotes    Quote[]
+  materials Material[]
+  machines  Machine[]
+  spools    MaterialSpool[]
+  customers Customer[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+model Quote {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id])
+  customerId      String?
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  projectName     String
+  printColour     String
+  printType       String
+  materialCost    Float
+  machineTimeCost Float
+  electricityCost Float
+  laborCost       Float
+  overheadCost    Float
+  subtotal        Float
+  markup          Float
+  paintingCost    Float?
+  totalPrice      Float
+  quantity        Int             @default(1)
+  unitPrice       Float
+  notes           String?
+  status          String          @default("PENDING")
+  priority        String?
+  dueDate         DateTime?
+  filePath        String?
+  filamentWeight  Float?
+  printTime       Float?
+  laborHours      Float?
+  resinVolume     Float?
+  washingTime     Float?
+  curingTime      Float?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  quoteFilaments  QuoteFilament[]
+  printJob        PrintJob?
+  auditLog        AuditLog[]
+}
+
+model Material {
+  id          String          @id @default(cuid())
+  userId      String?
+  user        User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id])
+  name        String
+  costPerUnit Float
+  printType   String
+  density     Float?
+  notes       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  spools      MaterialSpool[]
+}
+
+model Machine {
+  id               String     @id @default(cuid())
+  userId           String?
+  user             User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId        String
+  company          Company    @relation(fields: [companyId], references: [id])
+  name             String
+  hourlyCost       Float
+  powerConsumption Float?
+  printType        String
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  printJobs        PrintJob[]
+}
+
+model MaterialSpool {
+  id              String   @id @default(cuid())
+  materialId      String
+  material        Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  companyId       String
+  company         Company  @relation(fields: [companyId], references: [id])
+  weightGrams     Float?
+  remainingGrams  Float?
+  volumeMl        Float?
+  remainingMl     Float?
+  purchasedAt     DateTime
+  cost            Float
+  supplier        String?
+  batchNumber     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Customer {
+  id            String   @id @default(cuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id])
+  name          String
+  email         String?
+  phone         String?
+  companyName   String?
+  address       String?
+  tags          String[]
+  notes         String?
+  averageRating Float?
+  reviewCount   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  quotes        Quote[]
+}
+
+model PrintJob {
+  id                  String    @id @default(cuid())
+  quoteId             String    @unique
+  quote               Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  machineId           String
+  machine             Machine   @relation(fields: [machineId], references: [id])
+  status              String    @default("PENDING")
+  assignedEmployeeId  String?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  actualPrintTime     Float?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  quoteId   String?
+  quote     Quote?   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  action    String
+  changes   Json?
+  createdAt DateTime @default(now())
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key        String    @unique
+  name       String
+  active     Boolean   @default(true)
+  lastUsed   DateTime?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime?
+}
+
+model SyncTransaction {
+  id            String   @id @default(cuid())
+  userId        String
+  quoteId       String
+  operation     String
+  tableName     String
+  localChanges  Json
+  serverVersion Json?
+  status        String   @default("PENDING")
+  conflictedAt  DateTime?
+  resolvedAt    DateTime?
+  resolution    Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model QuoteFilament {
+  id          String   @id @default(cuid())
+  quoteId     String
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  materialId  String
+  weightGrams Float
+  order       Int
+  createdAt   DateTime @default(now())
+}

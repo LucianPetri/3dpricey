@@ -2,6 +2,19 @@
 
 A professional 3D printing price calculator and quote management tool by **Printel**. **3DPricey** allows users to calculate costs for both FDM and Resin printing, manage materials and machines, and track quotes.
 
+## 🚀 Phase 1: Infrastructure Complete
+
+Phase 1 introduces a complete cloud-ready architecture:
+- ✅ Backend API (Express.js + TypeScript)
+- ✅ PostgreSQL database with Prisma ORM
+- ✅ Docker Compose orchestration
+- ✅ Redis caching
+- ✅ MinIO file storage (S3-compatible)
+- ✅ JWT authentication
+- ✅ Background sync with conflict resolution
+
+**See [PHASE1-README.md](PHASE1-README.md) for setup instructions.**
+
 ## Features
 
 - **Dual Technology Support**: Separate calculators for FDM (Filament) and Resin (SLA/DLP) printing.
