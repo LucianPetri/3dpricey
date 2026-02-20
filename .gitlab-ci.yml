@@ -1,21 +1,190 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
-# Secret Detection customization: https://docs.gitlab.com/user/application_security/secret_detection/pipeline/configure
-# Dependency Scanning customization: https://docs.gitlab.com/ee/user/application_security/dependency_scanning/#customizing-the-dependency-scanning-settings
-# Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
 stages:
-- dev
-- test
-- staging
-- cleanup
-- secret-detection
-sast:
-  stage: test
-include:
-- template: Auto-DevOps.gitlab-ci.yml
+  - build
+  - deploy
+
 variables:
-  SECRET_DETECTION_ENABLED: 'true'
-secret_detection:
-  stage: secret-detection
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_DRIVER: overlay2
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH == "staging"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - when: never
+
+build_images:
+  stage: build
+  image: docker:24.0.7
+  services:
+    - name: docker:24.0.7-dind
+      command: ["--mtu=1460"]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH == "staging"
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - export IMAGE_TAG="$CI_COMMIT_SHORT_SHA"
+    - export API_URL="$DEV_VITE_API_URL"
+    - if [ "$CI_COMMIT_BRANCH" = "staging" ]; then export API_URL="$STAGING_VITE_API_URL"; fi
+    - if [ "$CI_COMMIT_BRANCH" = "main" ]; then export API_URL="$PROD_VITE_API_URL"; fi
+    - docker build -t "$CI_REGISTRY_IMAGE/backend:$IMAGE_TAG" backend
+    - docker build --build-arg VITE_API_URL="$API_URL" -t "$CI_REGISTRY_IMAGE/frontend:$IMAGE_TAG" frontend
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        echo "MR build only - skipping push."
+        exit 0
+      fi
+    - docker push "$CI_REGISTRY_IMAGE/backend:$IMAGE_TAG"
+    - docker push "$CI_REGISTRY_IMAGE/frontend:$IMAGE_TAG"
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "dev" ]; then
+        export ENV_TAG="dev-latest"
+      elif [ "$CI_COMMIT_BRANCH" = "staging" ]; then
+        export ENV_TAG="staging-latest"
+      elif [ "$CI_COMMIT_BRANCH" = "main" ]; then
+        export ENV_TAG="prod-latest"
+      fi
+    - docker tag "$CI_REGISTRY_IMAGE/backend:$IMAGE_TAG" "$CI_REGISTRY_IMAGE/backend:$ENV_TAG"
+    - docker tag "$CI_REGISTRY_IMAGE/frontend:$IMAGE_TAG" "$CI_REGISTRY_IMAGE/frontend:$ENV_TAG"
+    - docker push "$CI_REGISTRY_IMAGE/backend:$ENV_TAG"
+    - docker push "$CI_REGISTRY_IMAGE/frontend:$ENV_TAG"
+
+.deploy_template:
+  stage: deploy
+  image: alpine:3.19
+  before_script:
+    - apk add --no-cache openssh-client rsync
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+    - ssh "$SSH_USER@$DEPLOY_HOST" "mkdir -p /opt/3dpricey"
+    - rsync -av docker-compose.deploy.yml deploy/ "$SSH_USER@$DEPLOY_HOST:/opt/3dpricey/"
+    - |
+      ssh "$SSH_USER@$DEPLOY_HOST" "cat > /opt/3dpricey/.env <<EOF
+APP_ENV=$APP_ENV
+APP_IMAGE_TAG=$APP_IMAGE_TAG
+REGISTRY_IMAGE=$CI_REGISTRY_IMAGE
+
+DB_USER=$DB_USER
+DB_PASSWORD=$DB_PASSWORD
+DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@postgres:5432/3dpricey
+
+JWT_SECRET=$JWT_SECRET
+JWT_EXPIRY=7d
+REFRESH_TOKEN_EXPIRY=30d
+
+API_PORT=3001
+NODE_ENV=production
+FRONTEND_URL=$FRONTEND_URL
+
+REDIS_URL=redis://redis:6379
+
+MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY
+MINIO_SECRET_KEY=$MINIO_SECRET_KEY
+MINIO_ENDPOINT=minio:9000
+MINIO_BUCKET=$MINIO_BUCKET
+MINIO_REGION=us-east-1
+MINIO_PUBLIC_URL=$MINIO_PUBLIC_URL
+MINIO_USE_SSL=false
+
+VITE_API_URL=$VITE_API_URL
+
+PANGOLIN_ENDPOINT=$PANGOLIN_ENDPOINT
+NEWT_ID=$NEWT_ID
+NEWT_SECRET=$NEWT_SECRET
+PANGOLIN_BLUEPRINT_FILE=$PANGOLIN_BLUEPRINT_FILE
+EOF"
+    - |
+      ssh "$SSH_USER@$DEPLOY_HOST" "
+        echo $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER $CI_REGISTRY --password-stdin
+        cd /opt/3dpricey
+        docker compose -f docker-compose.deploy.yml pull
+        docker compose -f docker-compose.deploy.yml up -d
+      "
+
+# Dev
+
+deploy_dev:
+  extends: .deploy_template
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+  variables:
+    DEPLOY_HOST: $DEV_HOST
+    APP_ENV: dev
+    APP_IMAGE_TAG: dev-latest
+    DB_USER: $DEV_DB_USER
+    DB_PASSWORD: $DEV_DB_PASSWORD
+    JWT_SECRET: $DEV_JWT_SECRET
+    MINIO_ACCESS_KEY: $DEV_MINIO_ACCESS_KEY
+    MINIO_SECRET_KEY: $DEV_MINIO_SECRET_KEY
+    MINIO_BUCKET: $DEV_MINIO_BUCKET
+    MINIO_PUBLIC_URL: $DEV_MINIO_PUBLIC_URL
+    FRONTEND_URL: https://dev.printel.ro
+    VITE_API_URL: https://dev.printel.ro/api
+    PANGOLIN_ENDPOINT: $DEV_PANGOLIN_ENDPOINT
+    NEWT_ID: $DEV_NEWT_ID
+    NEWT_SECRET: $DEV_NEWT_SECRET
+    PANGOLIN_BLUEPRINT_FILE: /blueprints/3dpricey-dev.yml
+  environment:
+    name: dev
+    url: https://dev.printel.ro
+
+# Staging
+
+deploy_staging:
+  extends: .deploy_template
+  rules:
+    - if: $CI_COMMIT_BRANCH == "staging"
+  variables:
+    DEPLOY_HOST: $STAGING_HOST
+    APP_ENV: staging
+    APP_IMAGE_TAG: staging-latest
+    DB_USER: $STAGING_DB_USER
+    DB_PASSWORD: $STAGING_DB_PASSWORD
+    JWT_SECRET: $STAGING_JWT_SECRET
+    MINIO_ACCESS_KEY: $STAGING_MINIO_ACCESS_KEY
+    MINIO_SECRET_KEY: $STAGING_MINIO_SECRET_KEY
+    MINIO_BUCKET: $STAGING_MINIO_BUCKET
+    MINIO_PUBLIC_URL: $STAGING_MINIO_PUBLIC_URL
+    FRONTEND_URL: https://staging.printel.ro
+    VITE_API_URL: https://staging.printel.ro/api
+    PANGOLIN_ENDPOINT: $STAGING_PANGOLIN_ENDPOINT
+    NEWT_ID: $STAGING_NEWT_ID
+    NEWT_SECRET: $STAGING_NEWT_SECRET
+    PANGOLIN_BLUEPRINT_FILE: /blueprints/3dpricey-staging.yml
+  environment:
+    name: staging
+    url: https://staging.printel.ro
+
+# Prod
+
+deploy_prod:
+  extends: .deploy_template
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  variables:
+    DEPLOY_HOST: $PROD_HOST
+    APP_ENV: prod
+    APP_IMAGE_TAG: prod-latest
+    DB_USER: $PROD_DB_USER
+    DB_PASSWORD: $PROD_DB_PASSWORD
+    JWT_SECRET: $PROD_JWT_SECRET
+    MINIO_ACCESS_KEY: $PROD_MINIO_ACCESS_KEY
+    MINIO_SECRET_KEY: $PROD_MINIO_SECRET_KEY
+    MINIO_BUCKET: $PROD_MINIO_BUCKET
+    MINIO_PUBLIC_URL: $PROD_MINIO_PUBLIC_URL
+    FRONTEND_URL: https://printel.ro
+    VITE_API_URL: https://printel.ro/api
+    PANGOLIN_ENDPOINT: $PROD_PANGOLIN_ENDPOINT
+    NEWT_ID: $PROD_NEWT_ID
+    NEWT_SECRET: $PROD_NEWT_SECRET
+    PANGOLIN_BLUEPRINT_FILE: /blueprints/3dpricey-prod.yml
+  environment:
+    name: prod
+    url: https://printel.ro
+    deployment_tier: production

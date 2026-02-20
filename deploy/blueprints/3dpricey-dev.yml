@@ -1,0 +1,18 @@
+public-resources:
+  3dpricey-dev:
+    name: 3DPricey Dev
+    protocol: http
+    full-domain: dev.printel.ro
+    targets:
+      - hostname: localhost
+        port: 3001
+        method: http
+        path: /api
+        path-match: prefix
+        priority: 10
+      - hostname: localhost
+        port: 8080
+        method: http
+        path: /
+        path-match: prefix
+        priority: 100

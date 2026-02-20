@@ -296,6 +296,14 @@ services:
     environment:
       VITE_API_URL: http://localhost:3001/api
 
+  newt:
+    image: fosrl/newt:latest
+    env_file:
+      - ./.env
+    command: ["newt", "--blueprint-file", "${PANGOLIN_BLUEPRINT_FILE}"]
+    volumes:
+      - ./deploy/blueprints:/blueprints:ro
+
 volumes:
   postgres_data:
   redis_data:
@@ -318,6 +326,10 @@ MINIO_ROOT_PASSWORD=minioadmin
 MINIO_ENDPOINT=minio:9000
 MINIO_BUCKET=3dpricey-files
 MINIO_REGION=us-east-1
+PANGOLIN_ENDPOINT=https://app.pangolin.net
+NEWT_ID=your_newt_id_here
+NEWT_SECRET=your_newt_secret_here
+PANGOLIN_BLUEPRINT_FILE=/blueprints/3dpricey-dev.yml
 MINIO_PUBLIC_URL=http://localhost:9000
 VITE_API_URL=http://localhost:3001/api
 ```

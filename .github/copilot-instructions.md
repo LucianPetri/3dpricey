@@ -83,13 +83,14 @@ No PRs without these docs updated.
 | `src/components/**/*.tsx` | [COMPONENTS.md](./COMPONENTS.md) | Component patterns and usage |
 | `src/pages/*.tsx` | [COMPONENTS.md](./COMPONENTS.md) + architecture | Major page structure changes |
 | `vite.config.ts` or build config | This file | Build system changes |
+| `.gitlab-ci.yml` or deploy configs | This file | CI/CD and deployment changes |
 
 ---
 
 ## Architecture Overview
 
 ### Core Concept
-A **client-side quote calculator** with offline-first capabilities. All data persists in `localStorage` via a centralized [sessionStorage](src/lib/core/sessionStorage.ts) module. No backend dependency for core functionality; Supabase configured but optional for future features.
+A **full-stack quote calculator** with offline-first capabilities. Core data persists locally for offline use, while a Node/Express API and PostgreSQL provide multi-user sync, persistence, and auditability.
 
 ### Key Subsystems
 
@@ -112,6 +113,12 @@ A **client-side quote calculator** with offline-first capabilities. All data per
 - Wraps `localStorage` with type-safe getters/setters
 - Auto-initializes with default materials, machines, cost constants
 - Storage keys: `QUOTES`, `MATERIALS`, `MACHINES`, `CUSTOMERS`, `SPOOLS`, `GCODES`, `CONSTANTS`, etc.
+
+**5. Backend & Deployment**
+- **Backend:** Express + Prisma in [backend/](../backend/)
+- **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml)
+- **CI/CD:** GitLab pipeline in [.gitlab-ci.yml](../.gitlab-ci.yml)
+- **Ingress:** Pangolin Newt with blueprints in [deploy/blueprints/](../deploy/blueprints/)
 
 **5. Pages & Routing** ([src/pages/](src/pages/), [HashRouter](src/App.tsx))
 - **Index.tsx:** Quote calculator dashboard

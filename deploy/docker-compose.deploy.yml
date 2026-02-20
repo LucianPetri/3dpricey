@@ -3,7 +3,7 @@ version: '3.8'
 services:
   postgres:
     image: postgres:15-alpine
-    container_name: 3dpricey-postgres
+    container_name: 3dpricey-${APP_ENV}-postgres
     environment:
       POSTGRES_DB: 3dpricey
       POSTGRES_USER: ${DB_USER}
@@ -22,7 +22,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: 3dpricey-redis
+    container_name: 3dpricey-${APP_ENV}-redis
     ports:
       - "6379:6379"
     volumes:
@@ -38,7 +38,7 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: 3dpricey-minio
+    container_name: 3dpricey-${APP_ENV}-minio
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
@@ -57,10 +57,8 @@ services:
       - 3dpricey-network
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: 3dpricey-backend
+    image: ${REGISTRY_IMAGE}/backend:${APP_IMAGE_TAG}
+    container_name: 3dpricey-${APP_ENV}-backend
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/3dpricey
       JWT_SECRET: ${JWT_SECRET}
@@ -81,39 +79,31 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    volumes:
-      - ./backend/src:/app/src
     networks:
       - 3dpricey-network
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: http://localhost:3001/api
-    container_name: 3dpricey-frontend
+    image: ${REGISTRY_IMAGE}/frontend:${APP_IMAGE_TAG}
+    container_name: 3dpricey-${APP_ENV}-frontend
     ports:
       - "8080:80"
     depends_on:
       - backend
     environment:
-      VITE_API_URL: http://localhost:3001/api
+      VITE_API_URL: ${VITE_API_URL}
     networks:
       - 3dpricey-network
     restart: unless-stopped
 
   newt:
     image: fosrl/newt:latest
-    container_name: 3dpricey-newt
+    container_name: 3dpricey-${APP_ENV}-newt
     env_file:
       - ./.env
     command: ["newt", "--blueprint-file", "${PANGOLIN_BLUEPRINT_FILE}"]
     volumes:
       - ./deploy/blueprints:/blueprints:ro
-    profiles:
-      - pangolin
     networks:
       - 3dpricey-network
     restart: unless-stopped
