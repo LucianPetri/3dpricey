@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+const JWT_EXPIRY = '7d';
 
 export async function register(req: Request, res: Response) {
   try {
@@ -65,7 +66,7 @@ export async function register(req: Request, res: Response) {
     const token = jwt.sign(
       { id: user.id, email: user.email },
       process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRY || '7d' }
+      { expiresIn: JWT_EXPIRY }
     );
 
     res.status(201).json({
@@ -111,7 +112,7 @@ export async function login(req: Request, res: Response) {
     const token = jwt.sign(
       { id: user.id, email: user.email },
       process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRY || '7d' }
+      { expiresIn: JWT_EXPIRY }
     );
 
     // Return user data without password
@@ -155,7 +156,7 @@ export async function refreshToken(req: Request, res: Response) {
     const newToken = jwt.sign(
       { id: user.id, email: user.email },
       process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRY || '7d' }
+      { expiresIn: JWT_EXPIRY }
     );
 
     res.json({
@@ -176,16 +177,6 @@ export async function getProfile(req: Request, res: Response) {
       where: { id: userId },
       include: {
         company: true,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        companyId: true,
-        company: true,
-        createdAt: true,
-        updatedAt: true,
       },
     });
 

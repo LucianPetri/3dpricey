@@ -14,18 +14,18 @@ This guide explains how to deploy 3DPricey with 3 environments (dev, staging, pr
 All 3 environments run on the same Docker host on a shared network:
 
 ```
-GitLab Runner (on network)
-    ↓ SSH port 2222
-3dpricey-dev-ssh (container)      → /opt/3dpricey-dev
-3dpricey-staging-ssh (container)  → /opt/3dpricey-staging  
-3dpricey-prod-ssh (container)     → /opt/3dpricey-prod
+GitLab Runner
+  ↓ SSH port 22
+Deployment Host (SSH)
+  → /opt/3dpricey-dev
+  → /opt/3dpricey-staging
+  → /opt/3dpricey-prod
 ```
 
 Each environment runs its own:
 - PostgreSQL, Redis, MinIO
 - Backend API, Frontend
 - Newt service for Pangolin
-- SSH service for CI/CD access
 
 ## Step 1: Generate SSH Keypair for Deployment
 
@@ -48,13 +48,6 @@ On the **deployment host** (same machine where GitLab/Runner run):
 for env in dev staging prod; do
   mkdir -p /opt/3dpricey-$env
   chmod 755 /opt/3dpricey-$env
-done
-
-# Create shared SSH authorized_keys
-for env in dev staging prod; do
-  mkdir -p /opt/3dpricey-$env/ssh_authorized_keys_dir
-  cat ~/.ssh/3dpricey_deploy_key.pub > /opt/3dpricey-$env/ssh_authorized_keys_dir/authorized_keys
-  chmod 600 /opt/3dpricey-$env/ssh_authorized_keys_dir/authorized_keys
 done
 ```
 
@@ -119,7 +112,7 @@ Verify all containers are running:
 docker ps | grep 3dpricey
 ```
 
-Should see 18 containers total (6 per environment × 3 envs).
+Should see 15 containers total (5 per environment × 3 envs).
 
 ## Step 6: Configure GitLab CI/CD Variables
 
@@ -127,8 +120,9 @@ In **GitLab → Project → Settings → CI/CD → Variables**, add these **prot
 
 ### Global Variables
 ```
-SSH_PRIVATE_KEY = (content of ~/.ssh/3dpricey_deploy_key)
+SSH_PRIVATE_KEY_B64 = (base64 of ~/.ssh/3dpricey_deploy_key)
 SSH_USER = deploy
+SSH_PORT = 22
 ```
 
 ### Dev Environment
@@ -173,17 +167,15 @@ git push origin main
 SSH into the host and check:
 
 ```bash
-docker ps | grep ssh
-netstat -tlnp | grep 2222  # Should be listening
-docker logs 3dpricey-dev-ssh  # Check SSH service logs
+ss -tlnp | grep 22  # Should be listening
 ```
 
 ### Git Clone Fails
 
-The SSH containers need internet access to clone from git.xaiko.cloud. Check:
+The deployment host needs internet access to clone from git.xaiko.cloud. Check:
 
 ```bash
-docker exec 3dpricey-dev-ssh ping git.xaiko.cloud
+ping git.xaiko.cloud
 ```
 
 ### Docker Compose Up Fails

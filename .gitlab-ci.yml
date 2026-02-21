@@ -4,6 +4,7 @@ stages:
 
 variables:
   SSH_USER: ${SSH_USER:-deploy}
+  SSH_PORT: ${SSH_PORT:-22}
 
 workflow:
   rules:
@@ -27,6 +28,34 @@ validate_code:
     - npm run lint
     - echo "✓ Frontend validation passed"
 
+unit_tests:
+  stage: validate
+  image: node:20-alpine
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "dev"
+    - if: $CI_COMMIT_BRANCH == "staging"
+    - if: $CI_COMMIT_BRANCH == "main"
+  script:
+    - |
+      if find backend -type f \( -name "*test.ts" -o -name "*spec.ts" \) | grep -q .; then
+        cd backend
+        npm ci
+        npm run test
+        cd ..
+      else
+        echo "No backend tests found"
+      fi
+    - |
+      if find frontend -type f \( -name "*test.ts" -o -name "*spec.ts" \) | grep -q .; then
+        cd frontend
+        npm ci
+        npm run test --if-present
+        cd ..
+      else
+        echo "No frontend tests found"
+      fi
+
 .deploy_template:
   stage: deploy
   image: alpine:3.19
@@ -35,11 +64,11 @@ validate_code:
     - mkdir -p ~/.ssh
     - echo "$SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -p 2222 -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
-    - ssh -p 2222 "$SSH_USER@$DEPLOY_HOST" "mkdir -p /opt/3dpricey-$APP_ENV" 2>/dev/null || true
+    - ssh-keyscan -p "$SSH_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+    - ssh -p "$SSH_PORT" "$SSH_USER@$DEPLOY_HOST" "mkdir -p /opt/3dpricey-$APP_ENV" 2>/dev/null || true
   script:
     - |
-      ssh -p 2222 "$SSH_USER@$DEPLOY_HOST" "
+      ssh -p "$SSH_PORT" "$SSH_USER@$DEPLOY_HOST" "
         cd /opt/3dpricey-$APP_ENV
         git clone --depth=1 --branch=$CI_COMMIT_BRANCH https://git.xaiko.cloud/xaiko/3dpricey.git . 2>/dev/null || git -C . pull
         cat > .env.$APP_ENV <<EOF
@@ -103,6 +132,7 @@ deploy_staging:
   extends: .deploy_template
   rules:
     - if: $CI_COMMIT_BRANCH == "staging"
+      when: manual
   variables:
     DEPLOY_HOST: 3dpricey-staging-ssh
     APP_ENV: staging
@@ -129,6 +159,7 @@ deploy_prod:
   extends: .deploy_template
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
   variables:
     DEPLOY_HOST: 3dpricey-prod-ssh
     APP_ENV: prod

@@ -1,11 +1,11 @@
 # 3DPricey Frontend Dockerfile
 
-FROM node:20-alpine AS builder
+FROM node:lts-alpine3.22 AS builder
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json package-lock.json ./
 
 # Install dependencies
 RUN npm ci
@@ -19,7 +19,7 @@ ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # Production stage with nginx
-FROM nginx:alpine
+FROM nginx:stable-alpine3.23-perl
 
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html

@@ -116,13 +116,12 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 
 **5. Backend & Deployment**
 - **Backend:** Express + Prisma in [backend/](../backend/)
-- **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml) (local dev) and [deploy/docker-compose.deploy.yml](../deploy/docker-compose.deploy.yml) (production)
+- **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml) (local dev) and [deploy/docker-compose.deploy.yml](../deploy/docker-compose.deploy.yml) (deploy/dev with local frontend/backend builds)
 - **CI/CD:** GitLab pipeline with 2 stages: validate (lint frontend) + deploy (SSH to servers)
 - **Pipeline:** [.gitlab-ci.yml](../.gitlab-ci.yml) - runs on `merge_request_event`, `dev`, `staging`, `main` branches
-- **SSH Service:** OpenSSH server in docker-compose for CI/CD access (port 2222)
 - **Ingress:** Pangolin Newt with blueprints in [deploy/blueprints/](../deploy/blueprints/)
 - **Env per site:** CI writes a per-environment `.env.$APP_ENV` on each host with Newt ID/secret and blueprint path
-- **Setup Guide:** [deploy/DEPLOYMENT-SETUP.md](../deploy/DEPLOYMENT-SETUP.md) - SSH keypair generation, authorized_keys setup, GitLab variables
+- **Setup Guide:** [deploy/DEPLOYMENT-SETUP.md](../deploy/DEPLOYMENT-SETUP.md) - SSH keypair generation and GitLab variables
 
 ### CI/CD Pipeline Flow
 
@@ -141,9 +140,9 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 **SSH Access Pattern:**
 ```
 GitLab Runner (Alpine) 
-  --SSH port 2222--> Deployment Server 
+  --SSH port 22--> Deployment Server 
     --Docker CLI via socket--> Docker Daemon 
-      --compose--> Services (postgres, redis, minio, backend, frontend, newt, ssh)
+      --compose--> Services (postgres, redis, minio, backend, frontend, newt)
 ```
 
 **5. Pages & Routing** ([src/pages/](src/pages/), [HashRouter](src/App.tsx))
