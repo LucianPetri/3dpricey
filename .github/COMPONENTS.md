@@ -269,6 +269,37 @@ The main calculation page uses a **modern left sidebar navigation design** with 
 - Right side shows live profit chip (only visible when quote is calculated)
 - Gradient background matching sidebar theme
 
+### Settings Console Architecture
+
+**File:** [src/pages/Settings.tsx](../frontend/src/pages/Settings.tsx)
+
+The settings experience uses an **Index-style left sidebar layout** with grouped navigation and a dedicated content workspace:
+
+- **Left Sidebar (sticky)**
+  - Dark gradient shell matching the calculator page visual language
+  - Grouped navigation sections: `Print Setup`, `Business`, `Workspace`
+  - Active item uses emerald/cyan gradient state and border (same style family as Index sidebar)
+
+- **Sidebar Footer Utilities**
+  - Printer connection action with truncation-safe status text
+  - Currency selector and back-to-calculator action
+
+- **Main Content Workspace**
+  - Sticky dark header with section icon, title, group badge, and description
+  - Content card renders the active settings manager component
+  - Export/Import remains below the main settings card
+
+- **Navigation Behavior**
+  - URL query param (`?tab=`) remains the source of truth for active section
+  - Invalid or missing tab value falls back to `materials`
+  - Sidebar labels use truncation-safe text to prevent overflow
+
+**Why this pattern works:**
+- Matches the primary app shell users already know from [src/pages/Index.tsx](../src/pages/Index.tsx)
+- Keeps navigation persistent while users work in deep settings forms
+- Improves visual consistency between Calculator and Settings experiences
+- Preserves all existing settings modules without changing business behavior
+
 ### Quotes Dashboard Cards
 
 **Component:** [src/components/dashboard/QuotesDashboard.tsx](../src/components/dashboard/QuotesDashboard.tsx)
