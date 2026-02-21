@@ -126,6 +126,63 @@ interface CurrencyContextType {
 **Hook:** `useCurrency()`  
 **Persistence:** sessionStorage under `CURRENCY` key
 
+### 5. Stock Management System
+**Files:** 
+- Storage layer: [src/lib/core/sessionStorage.ts](../src/lib/core/sessionStorage.ts) (functions: `getStock()`, `addToStock()`, `removeFromStock()`, `updateStockStatus()`, `getStockStats()`, `deleteStockItem()`)
+- Hook: [src/hooks/useStock.ts](../src/hooks/useStock.ts)
+- Page: [src/pages/StockManagement.tsx](../src/pages/StockManagement.tsx)
+
+**Purpose:** Track inventory from completed print jobs; support manual stock removal/sales workflow
+
+**Core Types:**
+```typescript
+interface StockItem {
+  id: string;                        // UUID
+  quoteId?: string;                  // Reference to source quote
+  projectName: string;               // Job/product name
+  quantity: number;                  // Units in stock
+  unitPrice: number;                 // Cost per unit
+  totalCost: number;                 // Total inventory value (quantity * unitPrice)
+  printType: string;                 // 'FDM' | 'Resin'
+  material?: string;                 // Material name
+  color?: string;                    // Hex color code
+  createdAt: string;                 // ISO timestamp
+  status: 'IN_STOCK' | 'SOLD' | 'RESERVED';  // Inventory status
+}
+
+interface StockStats {
+  totalItems: number;                // Total IN_STOCK units
+  totalValue: number;                // Total IN_STOCK value (sum of quantity * unitPrice)
+  soldItems: number;                 // Total SOLD units
+  soldValue: number;                 // Total SOLD value
+  reservedItems: number;             // Total RESERVED units
+  reservedValue: number;             // Total RESERVED value
+}
+```
+
+**Hook:** `useStock()`  
+**Persistence:** localStorage under `STOCK` key
+
+**Functions:**
+- `addToStock(quoteData, quantity)` – Creates new StockItem from completed quote
+- `removeFromStock(stockId, soldQty)` – Sells/removes units, updates status to SOLD
+- `updateStockStatus(stockId, newStatus)` – Transitions item between statuses
+- `getStockStats()` – Returns aggregated stats
+- `deleteStockItem(stockId)` – Permanently removes stock entry
+- `getStock()` – Retrieves all stock items
+
+**Auto-Add Workflow:**
+When a ProductionJob moves to `'completed'` status (via drag-drop in PrintManagement), [ProductionProvider.tsx](../src/contexts/ProductionProvider.tsx) automatically calls `sessionStore.addToStock(job.quote, job.quote.quantity)`:
+```typescript
+// In moveJob callback, line ~56:
+if (newStatus === 'completed' && jobToMove.status !== 'completed') {
+  sessionStore.addToStock(jobToMove.quote, jobToMove.quote.quantity || 1);
+  toast.success('Stock entry created from completed job');
+}
+```
+
+No manual action required from user—all completed jobs automatically appear in Stock Management page.
+
 ## Custom Hooks Pattern
 
 All contexts are consumed via custom hooks that:

@@ -112,7 +112,15 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 **4. Data Persistence** ([src/lib/core/sessionStorage.ts](src/lib/core/sessionStorage.ts))
 - Wraps `localStorage` with type-safe getters/setters
 - Auto-initializes with default materials, machines, cost constants
-- Storage keys: `QUOTES`, `MATERIALS`, `MACHINES`, `CUSTOMERS`, `SPOOLS`, `GCODES`, `CONSTANTS`, etc.
+- Storage keys: `QUOTES`, `MATERIALS`, `MACHINES`, `CUSTOMERS`, `SPOOLS`, `GCODES`, `CONSTANTS`, `STOCK`, etc.
+
+**5. Stock Management System** ([src/lib/core/sessionStorage.ts](src/lib/core/sessionStorage.ts), [src/hooks/useStock.ts](src/hooks/useStock.ts), [src/pages/StockManagement.tsx](src/pages/StockManagement.tsx))
+- Tracks inventory from completed print jobs (auto-creates StockItem when ProductionJob reaches 'completed' status)
+- Types: `StockItem` (id, quoteId, projectName, quantity, unitPrice, totalCost, material, color, etc.)
+- Statuses: IN_STOCK, SOLD, RESERVED
+- Manual workflow: Select stock item → enter sold quantity → mark as SOLD
+- Storage key: `STOCK` (array of StockItem objects in localStorage)
+- Integration: [ProductionProvider.tsx](src/contexts/ProductionProvider.tsx) auto-triggers `addToStock()` on job completion
 
 **5. Backend & Deployment**
 - **Backend:** Express + Prisma in [backend/](../backend/)
@@ -146,10 +154,11 @@ GitLab Runner (Alpine)
 ```
 
 **5. Pages & Routing** ([src/pages/](src/pages/), [HashRouter](src/App.tsx))
-- **Index.tsx:** Quote calculator dashboard
+- **Index.tsx:** Quote calculator dashboard with left sidebar navigation
 - **PrintManagement.tsx:** Kanban board for production workflow
 - **SavedQuotes.tsx:** Quote history + export
 - **Settings.tsx:** Configuration for materials, machines, company info
+- **StockManagement.tsx:** Inventory tracking from completed jobs with sales workflow
 - **OrderManagement.tsx:** CRM integration
 
 ## Development Workflow

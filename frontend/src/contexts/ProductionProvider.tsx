@@ -10,6 +10,7 @@ import { QuoteData } from '@/types/quote';
 import { toast } from 'sonner';
 import { ProductionJob, JobStatus } from '@/types/production';
 import { ProductionContext } from '@/contexts/ProductionContext';
+import * as sessionStore from '@/lib/core/sessionStorage';
 
 const STORAGE_KEY = 'production_manager_jobs';
 
@@ -63,7 +64,18 @@ export const ProductionProvider = ({ children }: { children: ReactNode }) => {
                 machineId: newMachineId,
             };
 
-            // 3. Insert into new position
+            // 3. Auto-add to stock when job moves to 'completed' status
+            if (newStatus === 'completed' && jobToMove.status !== 'completed') {
+                try {
+                    sessionStore.addToStock(jobToMove.quote, jobToMove.quote.quantity || 1);
+                    toast.success('Stock entry created from completed job');
+                } catch (error) {
+                    console.error('Error adding to stock:', error);
+                    toast.error('Failed to create stock entry');
+                }
+            }
+
+            // 4. Insert into new position
             // Filter jobs that are in the *target* list (same status & machine)
             const targetList = filtered.filter(j =>
                 j.status === newStatus && j.machineId === newMachineId

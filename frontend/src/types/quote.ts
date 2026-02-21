@@ -333,6 +333,30 @@ export interface CompanySettings {
   footerText?: string;
 }
 
+// Stock Management
+export interface StockItem {
+  id: string;
+  quoteId: string;
+  projectName: string;
+  quantity: number;
+  unitPrice: number; // Cost per unit
+  totalCost: number;
+  printType: "FDM" | "Resin";
+  material?: string;
+  color?: string;
+  createdAt: string;
+  status: "IN_STOCK" | "SOLD" | "RESERVED"; // IN_STOCK = available, SOLD = removed/sold, RESERVED = for order
+}
+
+export interface StockStats {
+  totalItems: number;
+  totalValue: number;
+  soldItems: number;
+  soldValue: number;
+  reservedItems: number;
+  reservedValue: number;
+}
+
 // Stored G-code Files
 export interface StoredGcode {
   id: string;

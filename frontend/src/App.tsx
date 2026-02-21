@@ -23,6 +23,7 @@ import Layout from "./components/layout/Layout";
 const Index = lazy(() => import("./pages/Index"));
 const Settings = lazy(() => import("./pages/Settings"));
 const SavedQuotes = lazy(() => import("./pages/SavedQuotes"));
+const StockManagement = lazy(() => import("./pages/StockManagement"));
 
 const PrintManagement = lazy(() => import("./pages/PrintManagement"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -84,6 +85,7 @@ const App = () => {
                       <Route element={<Layout />}>
                         <Route path="/" element={<Index />} />
                         <Route path="/settings" element={<Settings />} />
+                        <Route path="/stock" element={<StockManagement />} />
                       </Route>
                       <Route path="/saved-quotes" element={<SavedQuotes />} />
                       <Route path="/order-management" element={<OrderManagement />} />

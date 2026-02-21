@@ -8,7 +8,7 @@
 // Local Storage - Data persists until explicitly cleared
 // Data remains even after app closes/restarts
 
-import { QuoteData, Material, Machine, CostConstant, Customer, CustomerReview, MaterialSpool, CompanySettings, QuoteStatus, Employee, StoredGcode, LaborItem } from "@/types/quote";
+import { QuoteData, Material, Machine, CostConstant, Customer, CustomerReview, MaterialSpool, CompanySettings, QuoteStatus, Employee, StoredGcode, LaborItem, StockItem, StockStats } from "@/types/quote";
 
 // Generate unique IDs
 const generateId = (): string => {
@@ -199,6 +199,7 @@ const STORAGE_KEYS = {
     EMPLOYEES: "session_employees",
     LABOR_ITEMS: "session_labor_items",
     GCODES: "session_gcodes",
+    STOCK: "session_stock",
     FDM_CALC_DRAFT: "session_fdm_calc_draft",
     RESIN_CALC_DRAFT: "session_resin_calc_draft",
     INITIALIZED: "session_initialized",
@@ -216,8 +217,14 @@ const initializeDefaults = () => {
         localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify([]));
         localStorage.setItem(STORAGE_KEYS.SPOOLS, JSON.stringify([]));
         localStorage.setItem(STORAGE_KEYS.GCODES, JSON.stringify([]));
+        localStorage.setItem(STORAGE_KEYS.STOCK, JSON.stringify([]));
         localStorage.setItem(STORAGE_KEYS.COMPANY, JSON.stringify(null));
         localStorage.setItem(STORAGE_KEYS.INITIALIZED, "true");
+    }
+
+    // Migration: Ensure STOCK key exists
+    if (!localStorage.getItem(STORAGE_KEYS.STOCK)) {
+        localStorage.setItem(STORAGE_KEYS.STOCK, JSON.stringify([]));
     }
 
     // Migration: Add default paint consumables if they don't exist
@@ -987,4 +994,89 @@ export const importAllSettings = (data: SettingsExport): { success: boolean; mes
         console.error("Import error:", error);
         return { success: false, message: "Failed to import settings" };
     }
+};
+
+// Stock Management Functions
+export const getStock = (): StockItem[] => {
+    initializeDefaults();
+    const data = localStorage.getItem(STORAGE_KEYS.STOCK);
+    return data ? JSON.parse(data) : [];
+};
+
+export const addToStock = (quoteData: QuoteData, quantity: number): void => {
+    initializeDefaults();
+    const stock = getStock();
+    const newItem: StockItem = {
+        id: generateId(),
+        quoteId: quoteData.id || generateId(),
+        projectName: quoteData.projectName,
+        quantity,
+        unitPrice: quoteData.unitPrice,
+        totalCost: quoteData.subtotal,
+        printType: quoteData.printType,
+        material: quoteData.parameters.materialName,
+        color: quoteData.printColour,
+        createdAt: new Date().toISOString(),
+        status: "IN_STOCK",
+    };
+    stock.push(newItem);
+    localStorage.setItem(STORAGE_KEYS.STOCK, JSON.stringify(stock));
+};
+
+export const removeFromStock = (stockId: string, soldQuantity: number): void => {
+    initializeDefaults();
+    const stock = getStock();
+    const index = stock.findIndex(item => item.id === stockId);
+    if (index !== -1) {
+        if (soldQuantity >= stock[index].quantity) {
+            stock[index].status = "SOLD";
+        } else {
+            stock[index].quantity -= soldQuantity;
+        }
+        localStorage.setItem(STORAGE_KEYS.STOCK, JSON.stringify(stock));
+    }
+};
+
+export const updateStockStatus = (stockId: string, status: "IN_STOCK" | "SOLD" | "RESERVED"): void => {
+    initializeDefaults();
+    const stock = getStock();
+    const item = stock.find(s => s.id === stockId);
+    if (item) {
+        item.status = status;
+        localStorage.setItem(STORAGE_KEYS.STOCK, JSON.stringify(stock));
+    }
+};
+
+export const getStockStats = (): StockStats => {
+    const stock = getStock();
+    const stats: StockStats = {
+        totalItems: 0,
+        totalValue: 0,
+        soldItems: 0,
+        soldValue: 0,
+        reservedItems: 0,
+        reservedValue: 0,
+    };
+
+    stock.forEach(item => {
+        if (item.status === "IN_STOCK") {
+            stats.totalItems += item.quantity;
+            stats.totalValue += item.totalCost * item.quantity;
+        } else if (item.status === "SOLD") {
+            stats.soldItems += item.quantity;
+            stats.soldValue += item.totalCost * item.quantity;
+        } else if (item.status === "RESERVED") {
+            stats.reservedItems += item.quantity;
+            stats.reservedValue += item.totalCost * item.quantity;
+        }
+    });
+
+    return stats;
+};
+
+export const deleteStockItem = (stockId: string): void => {
+    initializeDefaults();
+    const stock = getStock();
+    const filtered = stock.filter(item => item.id !== stockId);
+    localStorage.setItem(STORAGE_KEYS.STOCK, JSON.stringify(filtered));
 };

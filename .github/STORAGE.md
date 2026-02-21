@@ -288,6 +288,36 @@ This allows Settings UI to prioritize **how much of each color is available** al
 
 **Persistence:** Kanban board updates (ProductionContext).
 
+### STOCK
+**Key:** `APP::STOCK`  
+**Type:** `StockItem[]`  
+**Size:** ~300 bytes per item
+
+```typescript
+{
+  id: string;                                      // UUID
+  quoteId?: string;                                // Reference to source QUOTES
+  projectName: string;                             // Job/product name
+  quantity: number;                                // Units in stock
+  unitPrice: number;                               // Cost per unit (from quote)
+  totalCost: number;                               // Total inventory value (quantity * unitPrice)
+  printType: string;                               // "FDM" | "Resin"
+  material?: string;                               // Material name
+  color?: string;                                  // Hex color code (e.g., "#FF0000")
+  createdAt: string;                               // ISO date
+  status: "IN_STOCK" | "SOLD" | "RESERVED";       // Inventory status
+}
+```
+
+**Persistence:** Auto-created when ProductionJob moves to `'completed'` status; manual removal via StockManagement page.  
+**Usage:** Tracks completed print inventory with sales workflow. StockStats computed from this array:
+- `totalItems` = count where status="IN_STOCK"
+- `totalValue` = sum(quantity * unitPrice) for status="IN_STOCK"
+- `soldItems` = count where status="SOLD"
+- `soldValue` = sum(quantity * unitPrice) for status="SOLD"
+- `reservedItems` = count where status="RESERVED"
+- `reservedValue` = sum(quantity * unitPrice) for status="RESERVED"
+
 ### REVIEWS
 **Key:** `APP::REVIEWS`  
 **Type:** `CustomerReview[]`  

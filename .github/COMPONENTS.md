@@ -209,12 +209,65 @@ export const SavedQuotesTable = ({ quotes, onEdit, onDelete }: SavedQuotesTableP
 - The calculator summary header highlights **Profit** (`quote.markup`) rather than print type.
 - This keeps the primary KPI visible during quote creation.
 
+## Layout System: Left Sidebar Navigation
+
+### Calculator Page Architecture
+
+**File:** [src/pages/Index.tsx](../src/pages/Index.tsx)
+
+The main calculation page uses a **modern left sidebar navigation design** with dark green-blue theme:
+
+**Structure:**
+- **Left Sidebar** (256px fixed width, sticky, always visible):
+  - Dark gradient: `from-slate-950 via-slate-900 to-slate-900`
+  - Border and accents: Emerald (`emerald-900/30`) and cyan
+  - Organized navigation sections: Calculator, Management, Settings
+  - Sticky footer with currency, theme toggle, and reset button
+  - FDM/Resin tab buttons toggle calculator type in-place
+
+- **Main Content Area** (flex-1, scrollable):
+  - Header bar with page title and live profit chip
+  - Stats dashboard (only if quotes exist)
+  - Calculator form card (responsive grid 1fr/380px split on desktop)
+  - Quote summary card (sticky, right sidebar on desktop)
+  - Recent quotes table (below, full width)
+
+**Color Scheme:**
+- **Primary:** Emerald green (`emerald-{300,400,500,600,950}`)
+- **Secondary:** Cyan blue (`cyan-{300,400,500,600,950}`)
+- **Backgrounds:** Deep slate (`slate-{900,950}`)
+- **Active states:** Gradient fill `from-emerald-600/30 to-cyan-600/30` with `border-emerald-500/40`
+- **Hover states:** Background `slate-800/50` with emerald/cyan text lift
+- **Borders:** Subtle `emerald-900/20` for section dividers
+
+**Key UX Features:**
+- Sidebar remains sticky on scroll (doesn't disappear)
+- All fields present: form inputs, file upload, consumables, labor selections
+- Tab switching is instant (FDM/Resin) without page reload
+- Profit chip updates live as user inputs data
+- Recent quotes preview (first 5) visible on main page
+- "View Full History" link for complete quote archive
+
+**Why This Layout?**
+- Professional desktop app appearance with clear navigation
+- Dark theme reduces eye strain in production environments
+- Sidebar tabs prevent scattered click targets (compare to top tabs)
+- Right-sidebar quote summary keeps profit KPI in user's active viewport during calculation
+- Nested sections (Calculator / Management / Settings) provide logical grouping
+
 ### Calculator Page Header
 
-**Page:** [src/pages/Index.tsx](../src/pages/Index.tsx)
+**Sidebar Navigation Tabs:**
+- **FDM Printing** and **Resin Printing** tabs in left sidebar (not top header)
+- Clicking either tab switches calculator content (left main area) instantly
+- Active tab highlighted with gradient background and emerald border
+- Icon styling: `Printer` icon for both (can be replaced with print type icons)
 
-- Calculator tab labels use `FDM` and `Resin` (no `Printing` wording).
-- The tab header area shows a live **Profit** chip when a quote is calculated.
+**Main Header Bar** (above calculator content):
+- Displays current mode: "FDM Calculator" or "Resin Calculator"
+- Subtitle: "Professional 3D printing cost estimation"
+- Right side shows live profit chip (only visible when quote is calculated)
+- Gradient background matching sidebar theme
 
 ### Quotes Dashboard Cards
 
@@ -265,6 +318,34 @@ export const SavedQuotesTable = ({ quotes, onEdit, onDelete }: SavedQuotesTableP
   - **Your Spool** (optional): map to owned spool/inventory entry.
   - **Material** (required): map parsed filament to catalog material (auto-filled when possible, editable manually).
 - Quote validation now expects all detected filaments to have mapped materials.
+
+### Stock Management Page
+
+**File:** [src/pages/StockManagement.tsx](../src/pages/StockManagement.tsx)
+
+**Purpose:** Track inventory from completed print jobs with manual sales/removal workflow.
+
+**UX Features:**
+- **Stats Cards** (top): Display IN_STOCK count/value, SOLD count/value, RESERVED count/value, and total portfolio value
+- **Current Inventory Table**: Lists all IN_STOCK items with columns: Project, Type, Material, Color (swatch), Qty, Unit Price, Total Value, Created Date, Actions
+- **Actions per Item**:
+  - **Sell Button** → Opens modal to specify sold quantity and mark as SOLD
+  - **Delete Button** → Permanently removes stock entry
+- **Sold Items History Table** (below): Shows all SOLD items in muted style, tracking sales record
+- **Sell Dialog**: Simple form to enter sold quantity (with validation: can't exceed available units)
+
+**Integration with Quote Workflow:**
+- When a ProductionJob moves to `'completed'` status in PrintManagement Kanban, the `ProductionProvider` automatically calls `sessionStore.addToStock()`, creating a new StockItem
+- User sees toast notification: "Stock entry created from completed job"
+- No manual action needed—all completed jobs appear here automatically
+
+**Color Swatches:**
+- Uses `HexColorSwatch` component to display material color with tooltip on hover
+- Shows HEX, RGB, HSL, alpha, and decimal values in tooltip
+
+**Storage:**
+- All stock data persists to localStorage under `STOCK` key
+- Recovery from app crash/reload is automatic
 
 ### Hex Color Display Pattern
 
