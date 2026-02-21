@@ -51,7 +51,10 @@ interface MachinesFormProps {
 const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: MachinesFormProps) => {
   const [formData, setFormData] = useState({
     name: "",
-    hourly_cost: "",
+    machine_price: "",
+    hours_per_day_usage: "",
+    lifetime_years: "",
+    maintenance_percentage: "",
     power_consumption_watts: "",
     print_type: "FDM" as "FDM" | "Resin",
     description: "",
@@ -61,7 +64,10 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
     if (initialData) {
       setFormData({
         name: initialData.name,
-        hourly_cost: initialData.hourly_cost.toString(),
+        machine_price: initialData.machine_price?.toString() || "",
+        hours_per_day_usage: initialData.hours_per_day_usage?.toString() || "",
+        lifetime_years: initialData.lifetime_years?.toString() || "",
+        maintenance_percentage: initialData.maintenance_percentage?.toString() || "",
         power_consumption_watts: initialData.power_consumption_watts?.toString() || "",
         print_type: initialData.print_type,
         description: "",
@@ -69,7 +75,10 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
     } else {
       setFormData({
         name: "",
-        hourly_cost: "",
+        machine_price: "",
+        hours_per_day_usage: "",
+        lifetime_years: "",
+        maintenance_percentage: "",
         power_consumption_watts: "",
         print_type: "FDM",
         description: "",
@@ -80,7 +89,7 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.hourly_cost) {
+    if (!formData.name || !formData.machine_price || !formData.hours_per_day_usage || !formData.lifetime_years) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -90,9 +99,27 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
       return;
     }
 
-    const hourlyCost = parseFloat(formData.hourly_cost);
-    if (isNaN(hourlyCost) || hourlyCost < 0 || hourlyCost > 10000) {
-      toast.error("Hourly cost must be between 0 and 10000");
+    const machinePrice = parseFloat(formData.machine_price);
+    if (isNaN(machinePrice) || machinePrice <= 0 || machinePrice > 10000000) {
+      toast.error("Machine price must be between 0 and 10,000,000");
+      return;
+    }
+
+    const hoursPerDayUsage = parseFloat(formData.hours_per_day_usage);
+    if (isNaN(hoursPerDayUsage) || hoursPerDayUsage <= 0 || hoursPerDayUsage > 24) {
+      toast.error("Hours per day usage must be between 0 and 24");
+      return;
+    }
+
+    const lifetimeYears = parseFloat(formData.lifetime_years);
+    if (isNaN(lifetimeYears) || lifetimeYears <= 0 || lifetimeYears > 100) {
+      toast.error("Life time must be between 0 and 100 years");
+      return;
+    }
+
+    const maintenancePercentage = formData.maintenance_percentage ? parseFloat(formData.maintenance_percentage) : 0;
+    if (isNaN(maintenancePercentage) || maintenancePercentage < 0 || maintenancePercentage > 1000) {
+      toast.error("Maintenance percentage must be between 0 and 1000");
       return;
     }
 
@@ -102,13 +129,31 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
       return;
     }
 
+    const hourlyCost = sessionStore.calculateHourlyCostFromInputs(
+      machinePrice,
+      hoursPerDayUsage,
+      lifetimeYears,
+      maintenancePercentage
+    );
+
     onSubmit({
       name: formData.name,
-      hourly_cost: hourlyCost,
+      machine_price: machinePrice,
+      hours_per_day_usage: hoursPerDayUsage,
+      lifetime_years: lifetimeYears,
+      maintenance_percentage: maintenancePercentage,
+      hourly_cost: parseFloat(hourlyCost.toFixed(2)),
       power_consumption_watts: power,
       print_type: formData.print_type,
     });
   };
+
+  const previewHourlyCost = sessionStore.calculateHourlyCostFromInputs(
+    parseFloat(formData.machine_price) || 0,
+    parseFloat(formData.hours_per_day_usage) || 0,
+    parseFloat(formData.lifetime_years) || 0,
+    parseFloat(formData.maintenance_percentage) || 0
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -149,7 +194,7 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <Label htmlFor="hourly_cost">Hourly Cost ({currencySymbol}) *</Label>
+              <Label htmlFor="machine_price">Machine Price ({currencySymbol}) *</Label>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger type="button" aria-label="Help">
@@ -158,13 +203,13 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
                   <TooltipContent className="max-w-[300px] p-4 text-sm bg-popover border-border" side="right">
                     <div className="space-y-2">
                       <p className="font-semibold">How to calculate?</p>
-                      <p>Formula: Total Machine Cost / Total Lifespan Hours</p>
+                      <p>Formula: (Price / (Years × 365 × Hours/Day)) + (Price × Maintenance%)</p>
                       <div className="bg-muted p-2 rounded text-xs">
                         <p className="font-semibold mb-1">Example:</p>
                         <p>• Printer Cost: {currencySymbol}45,000</p>
                         <p>• Life: 2 Years @ 6hr/day (4,380 hrs)</p>
-                        <p className="mt-1 font-mono">Rate = 45000 / 4380 = {currencySymbol}10.27/hr</p>
-                        <p className="mt-1 text-muted-foreground text-[10px]">(Add +20% for maintenance)</p>
+                        <p className="mt-1 font-mono">Base = 45000 / 4380 = {currencySymbol}10.27/hr</p>
+                        <p className="mt-1 text-muted-foreground text-[10px]">Maintenance adds (Price × %)</p>
                       </div>
                     </div>
                   </TooltipContent>
@@ -172,20 +217,82 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
               </TooltipProvider>
             </div>
             <Input
-              id="hourly_cost"
-              name="hourly_cost"
+              id="machine_price"
+              name="machine_price"
               autoComplete="off"
               type="number"
               step="0.01"
-              value={formData.hourly_cost}
-              onChange={(e) => setFormData({ ...formData, hourly_cost: e.target.value })}
-              placeholder="5.00"
+              value={formData.machine_price}
+              onChange={(e) => setFormData({ ...formData, machine_price: e.target.value })}
+              placeholder="1200"
               required
               min="0"
-              max="10000"
+              max="10000000"
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="hours_per_day_usage">Hours per Day Usage *</Label>
+            <Input
+              id="hours_per_day_usage"
+              name="hours_per_day_usage"
+              autoComplete="off"
+              type="number"
+              step="0.1"
+              value={formData.hours_per_day_usage}
+              onChange={(e) => setFormData({ ...formData, hours_per_day_usage: e.target.value })}
+              placeholder="8"
+              required
+              min="0"
+              max="24"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="lifetime_years">Life Time (years) *</Label>
+            <Input
+              id="lifetime_years"
+              name="lifetime_years"
+              autoComplete="off"
+              type="number"
+              step="0.1"
+              value={formData.lifetime_years}
+              onChange={(e) => setFormData({ ...formData, lifetime_years: e.target.value })}
+              placeholder="3"
+              required
+              min="0"
+              max="100"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="maintenance_percentage">Maintenance Percentage (%)</Label>
+            <Input
+              id="maintenance_percentage"
+              name="maintenance_percentage"
+              autoComplete="off"
+              type="number"
+              step="0.1"
+              value={formData.maintenance_percentage}
+              onChange={(e) => setFormData({ ...formData, maintenance_percentage: e.target.value })}
+              placeholder="0"
+              min="0"
+              max="1000"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="calculated_hourly_cost">Calculated Hourly Cost ({currencySymbol})</Label>
+            <Input
+              id="calculated_hourly_cost"
+              name="calculated_hourly_cost"
+              value={previewHourlyCost ? previewHourlyCost.toFixed(2) : "0.00"}
+              readOnly
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="power_consumption_watts">Power Consumption (Watts)</Label>
             <Input
@@ -231,6 +338,10 @@ const MachinesList = memo(({ machines, onEdit, onDelete, formatPrice }: Machines
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Type</TableHead>
+            <TableHead>Machine Price</TableHead>
+            <TableHead>Hours/Day</TableHead>
+            <TableHead>Life (years)</TableHead>
+            <TableHead>Maint (%)</TableHead>
             <TableHead>Hourly Cost</TableHead>
             <TableHead>Power (W)</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -239,7 +350,7 @@ const MachinesList = memo(({ machines, onEdit, onDelete, formatPrice }: Machines
         <TableBody>
           {machines.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                 No machines added yet. Add your first machine.
               </TableCell>
             </TableRow>
@@ -252,6 +363,10 @@ const MachinesList = memo(({ machines, onEdit, onDelete, formatPrice }: Machines
                     {machine.print_type}
                   </span>
                 </TableCell>
+                <TableCell>{machine.machine_price ? formatPrice(machine.machine_price) : "-"}</TableCell>
+                <TableCell>{machine.hours_per_day_usage ?? "-"}</TableCell>
+                <TableCell>{machine.lifetime_years ?? "-"}</TableCell>
+                <TableCell>{machine.maintenance_percentage ?? "-"}</TableCell>
                 <TableCell>{formatPrice(machine.hourly_cost)}</TableCell>
                 <TableCell>{machine.power_consumption_watts ? `${machine.power_consumption_watts}W` : "-"}</TableCell>
                 <TableCell className="text-right">

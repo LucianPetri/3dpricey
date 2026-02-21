@@ -379,8 +379,8 @@ export function generateQuoteHTML(quote: QuoteData, currencySymbol: string): str
     <h3>${quote.projectName}</h3>
     <div class="project-grid">
       <div class="project-item">
-        <div class="label">Print Type</div>
-        <div class="value">${quote.printType}</div>
+        <div class="label">Profit Made</div>
+        <div class="value">${formatPrice(quote.markup)}</div>
       </div>
       <div class="project-item">
         <div class="label">Material</div>
@@ -404,12 +404,24 @@ export function generateQuoteHTML(quote: QuoteData, currencySymbol: string): str
     <tbody>
       <tr>
         <td>Manufacturing Cost</td>
-        <td>${formatPrice(quote.materialCost + quote.machineTimeCost + quote.electricityCost + quote.overheadCost + (quote.parameters?.consumablesTotal || 0) + (quote.paintingCost || 0))}</td>
+        <td>${formatPrice(quote.materialCost + quote.machineTimeCost + quote.electricityCost + quote.overheadCost + (quote.parameters?.consumablesTotal || 0) + (quote.laborConsumablesCost || 0) + (quote.laborMachineCost || 0))}</td>
       </tr>
       <tr>
         <td>Labour Charges</td>
         <td>${formatPrice(quote.laborCost)}</td>
       </tr>
+      ${(quote.laborConsumablesCost || 0) > 0 ? `
+      <tr>
+        <td>Labor Consumables</td>
+        <td>${formatPrice(quote.laborConsumablesCost || 0)}</td>
+      </tr>
+      ` : ''}
+      ${(quote.laborMachineCost || 0) > 0 ? `
+      <tr>
+        <td>Labor Equipment</td>
+        <td>${formatPrice(quote.laborMachineCost || 0)}</td>
+      </tr>
+      ` : ''}
       <tr class="subtotal-row">
         <td>Subtotal</td>
         <td>${formatPrice(quote.subtotal)}</td>

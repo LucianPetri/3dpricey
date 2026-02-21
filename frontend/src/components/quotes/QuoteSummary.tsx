@@ -18,6 +18,7 @@ import { useBatchQuote } from "@/hooks/useBatchQuote";
 import { useProduction } from "@/hooks/useProduction";
 import { useCalculatorData } from "@/hooks/useCalculatorData";
 import { getSpools } from "@/lib/core/sessionStorage";
+import { HexColorSwatch } from "@/components/shared/HexColorSwatch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -186,7 +187,7 @@ Generated: ${new Date().toLocaleString()}
           <div className="flex items-center gap-2 mb-2">
             <h2 className="text-xl font-bold">Quote Summary</h2>
           </div>
-          <p className="text-sm opacity-90 font-medium">{quoteData.printType} Printing</p>
+          <p className="text-sm opacity-90 font-medium">Profit: {formatPrice(quoteData.markup)}</p>
           <p className="text-sm opacity-75 mt-1">Project: {quoteData.projectName}</p>
           {quoteData.parameters?.materialName && (
             <p className="text-sm opacity-75 mt-1">Material: {quoteData.parameters.materialName}</p>
@@ -194,10 +195,10 @@ Generated: ${new Date().toLocaleString()}
           {quoteData.printColour && (
             <div className="flex items-center gap-2 mt-1">
               <span className="text-sm opacity-65">Colour:</span>
-              <div
-                className="w-5 h-5 rounded-full border-2 border-white/30"
-                style={{ backgroundColor: quoteData.printColour.split(';')[0] || quoteData.printColour }}
-                title={quoteData.printColour}
+              <HexColorSwatch
+                color={quoteData.printColour.split(';')[0] || quoteData.printColour}
+                size="lg"
+                className="border-white/30"
               />
             </div>
           )}
@@ -218,11 +219,14 @@ Generated: ${new Date().toLocaleString()}
             {quoteData.laborCost > 0 && (
               <CostRow label="Labor" value={quoteData.laborCost} />
             )}
+            {quoteData.laborConsumablesCost && quoteData.laborConsumablesCost > 0 && (
+              <CostRow label="Labor Consumables" value={quoteData.laborConsumablesCost} />
+            )}
+            {quoteData.laborMachineCost && quoteData.laborMachineCost > 0 && (
+              <CostRow label="Labor Equipment" value={quoteData.laborMachineCost} />
+            )}
             {quoteData.overheadCost > 0 && (
               <CostRow label="Overhead" value={quoteData.overheadCost} />
-            )}
-            {quoteData.paintingCost && quoteData.paintingCost > 0 && (
-              <CostRow label="Painting (Beta)" value={quoteData.paintingCost} />
             )}
           </div>
 

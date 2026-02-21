@@ -7,6 +7,7 @@
 
 // G-code and 3MF parser utility to extract print time and filament usage
 import JSZip from 'jszip';
+import { FilamentColorUsage, FilamentToolBreakdown, RecyclableColorUsage } from '@/types/quote';
 
 export interface GcodeData {
   printTimeHours: number;
@@ -19,7 +20,264 @@ export interface GcodeData {
   fileName?: string;
   filePath?: string; // Full path to the uploaded file
   surfaceAreaMm2?: number; // Estimated or calculated surface area
+  colorUsages?: FilamentColorUsage[];
+  toolBreakdown?: FilamentToolBreakdown[];
+  recyclableColorUsages?: RecyclableColorUsage[];
+  recyclableTotals?: {
+    supportGrams: number;
+    towerGrams: number;
+    flushGrams: number;
+    recyclableGrams: number;
+    modelGrams?: number;
+  };
 }
+
+const parseNumberList = (raw: string): number[] =>
+  raw
+    .split(/[;,]/)
+    .map(item => parseFloat(item.trim().replace(/[^\d.+-]/g, '')))
+    .filter(value => !Number.isNaN(value));
+
+const parseStringList = (raw: string): string[] =>
+  raw
+    .split(';')
+    .map(item => item.trim().replace(/^"|"$/g, ''))
+    .filter(Boolean);
+
+type Category = 'model' | 'support' | 'tower' | 'flush';
+
+const GCODE_NUMBER_PATTERN = '([+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+))';
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+const gramsPerMm = (diameter: number, density: number) => {
+  const areaMm2 = Math.PI * Math.pow(diameter / 2, 2);
+  return areaMm2 * (density / 1000);
+};
+
+const parseFlushMatrix = (content: string): number[][] | null => {
+  const matrixMatch = content.match(/;\s*flush_volumes_matrix\s*=\s*([^\n\r]+)/i);
+  if (!matrixMatch) return null;
+  const values = parseNumberList(matrixMatch[1]);
+  if (values.length === 0) return null;
+  const size = Math.sqrt(values.length);
+  if (!Number.isInteger(size)) return null;
+  const matrix: number[][] = [];
+  for (let row = 0; row < size; row += 1) {
+    matrix.push(values.slice(row * size, (row + 1) * size));
+  }
+  return matrix;
+};
+
+const extractToolSequence = (content: string): number[] => {
+  const lines = content.split(/\r?\n/);
+  const sequence: number[] = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith(';')) continue;
+    const toolMatch = line.match(/^T(\d+)\b/i);
+    if (!toolMatch) continue;
+    const tool = parseInt(toolMatch[1], 10);
+    if (Number.isNaN(tool)) continue;
+    if (sequence.length === 0 || sequence[sequence.length - 1] !== tool) {
+      sequence.push(tool);
+    }
+  }
+
+  return sequence;
+};
+
+const estimateFlushedByMatrix = (
+  content: string,
+  densityByTool: number[]
+): { byToolGrams: number[]; totalGrams: number } | null => {
+  const matrix = parseFlushMatrix(content);
+  if (!matrix) return null;
+
+  const sequence = extractToolSequence(content);
+  if (sequence.length < 2) return null;
+
+  const toolCount = matrix.length;
+  const byToolVolumeMm3 = new Array<number>(toolCount).fill(0);
+
+  for (let index = 0; index < sequence.length - 1; index += 1) {
+    const fromTool = sequence[index];
+    const toTool = sequence[index + 1];
+    if (fromTool < 0 || fromTool >= toolCount) continue;
+    if (toTool < 0 || toTool >= toolCount) continue;
+    byToolVolumeMm3[toTool] += matrix[fromTool][toTool] || 0;
+  }
+
+  const byToolGrams = byToolVolumeMm3.map((volumeMm3, toolIndex) => {
+    const density = densityByTool[toolIndex] || densityByTool[0] || 1.24;
+    return round2((volumeMm3 / 1000) * density);
+  });
+
+  return {
+    byToolGrams,
+    totalGrams: round2(byToolGrams.reduce((sum, value) => sum + value, 0)),
+  };
+};
+
+const estimateExtrusionBreakdown = (
+  content: string,
+  densityByTool: number[],
+  diameterByTool: number[],
+  colorsByTool: string[]
+) => {
+  const lines = content.split(/\r?\n/);
+  const byTool = new Map<number, {
+    modelMm: number;
+    supportMm: number;
+    towerMm: number;
+    flushMm: number;
+  }>();
+
+  const ensureTool = (tool: number) => {
+    if (!byTool.has(tool)) {
+      byTool.set(tool, { modelMm: 0, supportMm: 0, towerMm: 0, flushMm: 0 });
+    }
+    return byTool.get(tool)!;
+  };
+
+  let currentTool = 0;
+  let currentCategory: Category = 'model';
+  let towerBlock = false;
+  let flushBlock = false;
+  let extrusionAbsolute = true;
+  let currentE = 0;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const lower = line.toLowerCase();
+
+    if (!line) continue;
+
+    if (lower.startsWith(';')) {
+      if (lower.includes('wipe_tower_start')) {
+        towerBlock = true;
+        currentCategory = 'tower';
+      }
+      if (lower.includes('wipe_tower_end')) {
+        towerBlock = false;
+        currentCategory = flushBlock ? 'flush' : 'model';
+      }
+      if (lower.includes('cp toolchange wipe')) {
+        flushBlock = true;
+        currentCategory = 'flush';
+      }
+      if (lower.includes('cp toolchange end')) {
+        flushBlock = false;
+        currentCategory = towerBlock ? 'tower' : 'model';
+      }
+
+      const typeMatch = line.match(/;\s*TYPE\s*:\s*(.+)/i);
+      if (typeMatch) {
+        const type = typeMatch[1].toLowerCase();
+        if (flushBlock) {
+          currentCategory = 'flush';
+        } else if (towerBlock || type.includes('prime tower') || type.includes('wipe tower')) {
+          currentCategory = 'tower';
+        } else if (type.includes('support')) {
+          currentCategory = 'support';
+        } else {
+          currentCategory = 'model';
+        }
+      }
+      continue;
+    }
+
+    const toolMatch = line.match(/^T(\d+)\b/i);
+    if (toolMatch) {
+      currentTool = parseInt(toolMatch[1], 10);
+      ensureTool(currentTool);
+      continue;
+    }
+
+    if (/^M82\b/i.test(line)) {
+      extrusionAbsolute = true;
+      continue;
+    }
+
+    if (/^M83\b/i.test(line)) {
+      extrusionAbsolute = false;
+      continue;
+    }
+
+    const g92Match = line.match(new RegExp(`^G92\\b[^\\n\\r]*\\bE${GCODE_NUMBER_PATTERN}`, 'i'));
+    if (g92Match) {
+      currentE = parseFloat(g92Match[1]);
+      continue;
+    }
+
+    if (!/^(G0|G1|G2|G3)\b/i.test(line)) continue;
+
+    const eMatch = line.match(new RegExp(`(?:^|\\s)E${GCODE_NUMBER_PATTERN}(?:\\s|$)`, 'i'));
+    if (!eMatch) continue;
+
+    const eValue = parseFloat(eMatch[1]);
+    const delta = extrusionAbsolute ? eValue - currentE : eValue;
+
+    if (extrusionAbsolute) {
+      currentE = eValue;
+    }
+
+    if (delta <= 0) continue;
+
+    const tool = ensureTool(currentTool);
+    if (currentCategory === 'support') tool.supportMm += delta;
+    else if (currentCategory === 'tower') tool.towerMm += delta;
+    else if (currentCategory === 'flush') tool.flushMm += delta;
+    else tool.modelMm += delta;
+  }
+
+  const toolBreakdown: FilamentToolBreakdown[] = [];
+  let modelTotal = 0;
+  let supportTotal = 0;
+  let towerTotal = 0;
+  let flushTotal = 0;
+
+  const tools = Array.from(byTool.keys()).sort((a, b) => a - b);
+  for (const toolIndex of tools) {
+    const lengths = byTool.get(toolIndex)!;
+    const diameter = diameterByTool[toolIndex] || diameterByTool[0] || 1.75;
+    const density = densityByTool[toolIndex] || densityByTool[0] || 1.24;
+    const areaMm2 = Math.PI * Math.pow(diameter / 2, 2);
+    const gramsPerMm = areaMm2 * (density / 1000);
+
+    const modelGrams = lengths.modelMm * gramsPerMm;
+    const supportGrams = lengths.supportMm * gramsPerMm;
+    const towerGrams = lengths.towerMm * gramsPerMm;
+    const flushGrams = lengths.flushMm * gramsPerMm;
+    const recyclableGrams = supportGrams + towerGrams + flushGrams;
+    const totalGrams = modelGrams + recyclableGrams;
+
+    modelTotal += modelGrams;
+    supportTotal += supportGrams;
+    towerTotal += towerGrams;
+    flushTotal += flushGrams;
+
+    toolBreakdown.push({
+      tool: `T${toolIndex}`,
+      color: colorsByTool[toolIndex],
+      modelGrams: round2(modelGrams),
+      supportGrams: round2(supportGrams),
+      towerGrams: round2(towerGrams),
+      flushGrams: round2(flushGrams),
+      totalGrams: round2(totalGrams),
+    });
+  }
+
+  return {
+    toolBreakdown,
+    modelGrams: round2(modelTotal),
+    supportGrams: round2(supportTotal),
+    towerGrams: round2(towerTotal),
+    flushGrams: round2(flushTotal),
+    totalGrams: round2(modelTotal + supportTotal + towerTotal + flushTotal),
+  };
+};
 
 /**
  * Parse raw G-code text content to extract print time and filament weight
@@ -32,6 +290,25 @@ export function parseGcode(content: string): GcodeData {
   let filamentColour = '';
   let filamentSettingsId = '';
   let thumbnail = '';
+  let colorUsages: FilamentColorUsage[] = [];
+  let toolBreakdown: FilamentToolBreakdown[] = [];
+  let recyclableColorUsages: RecyclableColorUsage[] = [];
+
+  const densityMatch = content.match(/;\s*filament_density\s*:\s*([^\n\r]+)/i);
+  const diameterMatch = content.match(/;\s*filament_diameter\s*:\s*([^\n\r]+)/i);
+  const densityByTool = densityMatch ? parseNumberList(densityMatch[1]) : [1.24];
+  const diameterByTool = diameterMatch ? parseNumberList(diameterMatch[1]) : [1.75];
+
+  const colorListMatch = content.match(/;\s*filament_colou?r\s*=\s*([^\n\r]+)/i)
+    || content.match(/;\s*default_filament_colou?r\s*=\s*([^\n\r]+)/i);
+  const colorsByTool = colorListMatch ? parseStringList(colorListMatch[1]) : [];
+
+  const materialListMatch = content.match(/;\s*filament_type\s*=\s*([^\n\r]+)/i)
+    || content.match(/;\s*default_filament_type\s*=\s*([^\n\r]+)/i);
+  const materialsByTool = materialListMatch ? parseStringList(materialListMatch[1]) : [];
+
+  const settingsIdListMatch = content.match(/;\s*filament_settings_id\s*=\s*([^\n\r]+)/i);
+  const settingsIds = settingsIdListMatch ? parseStringList(settingsIdListMatch[1]) : [];
 
   // --- Filament weight patterns (supports various slicer formats) ---
   const weightPatterns = [
@@ -49,6 +326,21 @@ export function parseGcode(content: string): GcodeData {
     if (match) {
       filamentWeight = parseFloat(match[1]);
       break;
+    }
+  }
+
+  const perColorWeightMatch = content.match(/;\s*filament used\s*\[g\]\s*=\s*([^\n\r]+)/i);
+  const perColorWeights = perColorWeightMatch ? parseNumberList(perColorWeightMatch[1]) : [];
+  if (perColorWeights.length > 0) {
+    colorUsages = perColorWeights.map((usedGrams, index) => ({
+      tool: `T${index}`,
+      color: colorsByTool[index],
+      material: materialsByTool[index] || settingsIds[index],
+      usedGrams: Math.round(usedGrams * 100) / 100,
+    }));
+    const totalFromColors = perColorWeights.reduce((sum, value) => sum + value, 0);
+    if (filamentWeight === 0 || Math.abs(filamentWeight - totalFromColors) > 0.5) {
+      filamentWeight = totalFromColors;
     }
   }
 
@@ -150,6 +442,10 @@ export function parseGcode(content: string): GcodeData {
     }
   }
 
+  if (colorsByTool.length > 0) {
+    filamentColour = colorsByTool.join(';');
+  }
+
   // --- Filament settings/material extraction ---
   const materialPatterns = [
     /;\s*filament_settings_id\s*[:=]\s*(.+)/i,
@@ -165,6 +461,204 @@ export function parseGcode(content: string): GcodeData {
       break;
     }
   }
+
+  if (!filamentSettingsId && materialsByTool.length > 0) {
+    filamentSettingsId = materialsByTool.join(';');
+  }
+
+  const extrusionBreakdown = estimateExtrusionBreakdown(content, densityByTool, diameterByTool, colorsByTool);
+  const flushFromMatrix = estimateFlushedByMatrix(content, densityByTool);
+
+  const toolsCount = Math.max(
+    colorsByTool.length,
+    materialsByTool.length,
+    settingsIds.length,
+    perColorWeights.length,
+    extrusionBreakdown.toolBreakdown.length,
+    flushFromMatrix?.byToolGrams.length || 0,
+  );
+
+  if (toolsCount > 0) {
+    const builtToolBreakdown: FilamentToolBreakdown[] = [];
+
+    for (let index = 0; index < toolsCount; index += 1) {
+      const tool = `T${index}`;
+      const base = extrusionBreakdown.toolBreakdown.find(item => item.tool === tool);
+
+      const nonFlushMetadata = perColorWeights[index];
+      const parsedModel = base?.modelGrams ?? 0;
+      const parsedSupport = base?.supportGrams ?? 0;
+      const parsedTower = base?.towerGrams ?? 0;
+
+      let modelGrams = parsedModel;
+      let supportGrams = parsedSupport;
+      let towerGrams = parsedTower;
+
+      if (typeof nonFlushMetadata === 'number' && !Number.isNaN(nonFlushMetadata)) {
+        const normalizedNonFlush = Math.max(0, nonFlushMetadata);
+        modelGrams = Math.min(parsedModel, normalizedNonFlush);
+        const remainingAfterModel = Math.max(0, normalizedNonFlush - modelGrams);
+        supportGrams = Math.min(parsedSupport, remainingAfterModel);
+        towerGrams = Math.max(0, normalizedNonFlush - modelGrams - supportGrams);
+      }
+
+      const flushGrams = flushFromMatrix?.byToolGrams[index]
+        ?? base?.flushGrams
+        ?? 0;
+
+      const totalGrams = modelGrams + supportGrams + towerGrams + flushGrams;
+
+      builtToolBreakdown.push({
+        tool,
+        color: colorsByTool[index],
+        material: materialsByTool[index] || settingsIds[index],
+        modelGrams: round2(modelGrams),
+        supportGrams: round2(supportGrams),
+        towerGrams: round2(towerGrams),
+        flushGrams: round2(flushGrams),
+        totalGrams: round2(totalGrams),
+      });
+    }
+
+    const computedTotal = round2(builtToolBreakdown.reduce((sum, item) => sum + item.totalGrams, 0));
+    const computedModel = round2(builtToolBreakdown.reduce((sum, item) => sum + item.modelGrams, 0));
+    const computedSupport = round2(builtToolBreakdown.reduce((sum, item) => sum + item.supportGrams, 0));
+    const computedTower = round2(builtToolBreakdown.reduce((sum, item) => sum + item.towerGrams, 0));
+    const computedFlush = round2(builtToolBreakdown.reduce((sum, item) => sum + item.flushGrams, 0));
+
+    toolBreakdown = builtToolBreakdown;
+    colorUsages = builtToolBreakdown.map(item => ({
+      tool: item.tool,
+      color: item.color,
+      material: item.material,
+      usedGrams: item.totalGrams,
+    }));
+    recyclableColorUsages = builtToolBreakdown.map(item => ({
+      tool: item.tool,
+      color: item.color,
+      supportGrams: item.supportGrams,
+      towerGrams: item.towerGrams,
+      flushGrams: item.flushGrams,
+      recyclableGrams: round2(item.supportGrams + item.towerGrams + item.flushGrams),
+    }));
+
+    filamentWeight = computedTotal;
+
+    if (filamentLengthMm === 0) {
+      filamentLengthMm = round2(builtToolBreakdown.reduce((sum, item, index) => {
+        const diameter = diameterByTool[index] || diameterByTool[0] || 1.75;
+        const density = densityByTool[index] || densityByTool[0] || 1.24;
+        const gramsToMm = gramsPerMm(diameter, density);
+        if (!gramsToMm) return sum;
+        return sum + (item.totalGrams / gramsToMm);
+      }, 0));
+    }
+
+    const recyclableGrams = round2(computedSupport + computedTower + computedFlush);
+    const modelGrams = round2(computedModel);
+
+    // --- Thumbnail extraction (Base64) ---
+    // PrusaSlicer/SuperSlicer/Orca format:
+    // ; thumbnail begin <width>x<height> <size>
+    // ... base64 data ...
+    // ; thumbnail end
+
+    // Try to find the largest thumbnail
+    const thumbBeginRegex = /;\s*thumbnail(?:_JPG)?\s+begin\s+(\d+)[xX](\d+)\s+(\d+)/gi;
+    let match;
+    let maxPixels = 0;
+    let bestThumbStart = -1;
+    let bestThumbType = 'png'; // default to png
+
+    while ((match = thumbBeginRegex.exec(content)) !== null) {
+      const width = parseInt(match[1]);
+      const height = parseInt(match[2]);
+      const pixels = width * height;
+
+      if (pixels > maxPixels) {
+        maxPixels = pixels;
+        bestThumbStart = match.index;
+        if (match[0].toLowerCase().includes('jpg')) {
+          bestThumbType = 'jpg';
+        } else {
+          bestThumbType = 'png';
+        }
+      }
+    }
+
+    if (bestThumbStart !== -1) {
+      // Extract the specific thumbnail block
+      const thumbBlockStart = content.indexOf('\n', bestThumbStart) + 1;
+      const thumbBlockEnd = content.indexOf('thumbnail', thumbBlockStart); // approximate end
+
+      if (thumbBlockStart > 0 && thumbBlockEnd > thumbBlockStart) {
+        // Look for the end marker more precisely
+        const nextEndMarker = content.substring(thumbBlockStart, thumbBlockStart + 50000).match(/;\s*thumbnail(?:_JPG)?\s+end/i);
+
+        if (nextEndMarker && nextEndMarker.index !== undefined) {
+          // Extract lines, remove '; ' prefix and whitespace
+          const rawBlock = content.substring(thumbBlockStart, thumbBlockStart + nextEndMarker.index);
+          const base64Data = rawBlock.replace(/^[ \t]*;[ \t]*/gm, '').replace(/\s/g, '');
+
+          if (base64Data.length > 100) {
+            thumbnail = `data:image/${bestThumbType};base64,${base64Data}`;
+          }
+        }
+      }
+    }
+
+    return {
+      printTimeHours: Math.round((timeHours || 0) * 100) / 100,
+      filamentWeightGrams: Math.round((filamentWeight || 0) * 10) / 10,
+      filamentLengthMm: Math.round(filamentLengthMm * 10) / 10,
+      printerModel: printerModel || undefined,
+      filamentColour: filamentColour || undefined,
+      filamentSettingsId: filamentSettingsId || undefined,
+      thumbnail: thumbnail || undefined,
+      colorUsages: colorUsages.length > 0 ? colorUsages : undefined,
+      toolBreakdown: toolBreakdown.length > 0 ? toolBreakdown : undefined,
+      recyclableColorUsages: recyclableColorUsages.length > 0 ? recyclableColorUsages : undefined,
+      recyclableTotals: {
+        supportGrams: computedSupport,
+        towerGrams: computedTower,
+        flushGrams: computedFlush,
+        recyclableGrams,
+        modelGrams,
+      },
+    };
+  }
+
+  const recyclable = extrusionBreakdown;
+  recyclableColorUsages = recyclable.toolBreakdown.map(item => ({
+    tool: item.tool,
+    color: item.color,
+    supportGrams: item.supportGrams,
+    towerGrams: item.towerGrams,
+    flushGrams: item.flushGrams,
+    recyclableGrams: round2(item.supportGrams + item.towerGrams + item.flushGrams),
+  }));
+
+  if (filamentWeight === 0 && recyclable.totalGrams > 0) {
+    colorUsages = recyclable.toolBreakdown.map((usage, index) => ({
+      tool: usage.tool,
+      color: usage.color,
+      material: materialsByTool[index] || settingsIds[index],
+      usedGrams: usage.totalGrams,
+    }));
+    filamentWeight = recyclable.totalGrams;
+  }
+
+  if (colorUsages.length === 0 && filamentWeight > 0) {
+    colorUsages = [{
+      tool: 'T0',
+      color: filamentColour || undefined,
+      material: filamentSettingsId || undefined,
+      usedGrams: Math.round(filamentWeight * 100) / 100,
+    }];
+  }
+
+  const recyclableGrams = Math.round((recyclable.supportGrams + recyclable.towerGrams + recyclable.flushGrams) * 100) / 100;
+  const modelGrams = Math.round(Math.max(0, recyclable.modelGrams) * 100) / 100;
 
   // --- Thumbnail extraction (Base64) ---
   // PrusaSlicer/SuperSlicer/Orca format:
@@ -224,6 +718,16 @@ export function parseGcode(content: string): GcodeData {
     filamentColour: filamentColour || undefined,
     filamentSettingsId: filamentSettingsId || undefined,
     thumbnail: thumbnail || undefined,
+    colorUsages: colorUsages.length > 0 ? colorUsages : undefined,
+    toolBreakdown: toolBreakdown.length > 0 ? toolBreakdown : undefined,
+    recyclableColorUsages: recyclableColorUsages.length > 0 ? recyclableColorUsages : undefined,
+    recyclableTotals: {
+      supportGrams: recyclable.supportGrams,
+      towerGrams: recyclable.towerGrams,
+      flushGrams: recyclable.flushGrams,
+      recyclableGrams,
+      modelGrams,
+    },
   };
 }
 

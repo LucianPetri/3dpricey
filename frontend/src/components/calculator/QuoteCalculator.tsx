@@ -12,11 +12,12 @@ import { Calculator, Loader2 } from "lucide-react";
 interface QuoteCalculatorProps {
   loading: boolean;
   onCalculate: () => void;
+  onReset?: () => void;
   children: React.ReactNode;
   uploadSection?: React.ReactNode;
 }
 
-export const QuoteCalculator = memo(({ loading, onCalculate, children, uploadSection }: QuoteCalculatorProps) => {
+export const QuoteCalculator = memo(({ loading, onCalculate, onReset, children, uploadSection }: QuoteCalculatorProps) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -38,15 +39,26 @@ export const QuoteCalculator = memo(({ loading, onCalculate, children, uploadSec
         </div>
       </div>
 
-      <Button
-        onClick={onCalculate}
-        className="w-full font-bold shadow-elevated hover:shadow-md hover:scale-[1.02] transition-all duration-200"
-        size="lg"
-        variant="default"
-      >
-        <Calculator className="w-5 h-5 mr-2" />
-        Calculate Quote
-      </Button>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Button
+          onClick={onCalculate}
+          className="w-full font-bold shadow-elevated hover:shadow-md hover:scale-[1.02] transition-all duration-200"
+          size="lg"
+          variant="default"
+        >
+          <Calculator className="w-5 h-5 mr-2" />
+          Calculate Quote
+        </Button>
+        <Button
+          onClick={onReset}
+          className="w-full"
+          size="lg"
+          variant="outline"
+          disabled={!onReset}
+        >
+          Reset Quote
+        </Button>
+      </div>
     </div>
   );
 });

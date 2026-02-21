@@ -15,20 +15,18 @@ export interface QuoteData {
   machineTimeCost: number;
   electricityCost: number;
   laborCost: number;
+  laborConsumablesCost?: number;
+  laborMachineCost?: number;
   overheadCost: number;
   subtotal: number;
   markup: number;
   totalPrice: number;
-  paintingCost?: number; // New: Cost of hand painting
   unitPrice: number;  // Price per single unit
   quantity: number;   // Number of units
   printType: "FDM" | "Resin";
   projectName: string;
   printColour: string;
   parameters: QuoteParameters;
-  paintingTime?: number; // hours
-  paintingLayers?: number;
-  surfaceAreaCm2?: number; // Surface area in cm²
   createdAt?: string;
   notes?: string;
   filePath?: string;  // Original uploaded file path for printing
@@ -65,6 +63,32 @@ export interface Employee {
   email?: string;
   phone?: string;
   createdAt: string;
+  allowedLaborItemIds?: string[];
+}
+
+export type LaborPricingModel = "hourly" | "flat";
+
+export interface LaborConsumableInput {
+  id: string;
+  constantId: string;
+  quantityPerUnit: number;
+}
+
+export interface LaborMachineInput {
+  id: string;
+  machineId: string;
+  hoursPerUnit: number;
+}
+
+export interface LaborItem {
+  id: string;
+  name: string;
+  type: string;
+  pricingModel: LaborPricingModel;
+  rate: number;
+  description?: string;
+  consumables: LaborConsumableInput[];
+  machines: LaborMachineInput[];
 }
 
 export interface QuoteParameters {
@@ -72,13 +96,89 @@ export interface QuoteParameters {
   machineName?: string;
   consumables?: { name: string; value: number }[];
   consumablesTotal?: number;
+  laborItemsUsed?: LaborItemUsage[];
+  laborConsumablesUsed?: LaborConsumableUsage[];
+  laborMachinesUsed?: LaborMachineUsage[];
+  laborSelections?: LaborSelection[];
+  colorUsages?: FilamentColorUsage[];
+  recyclableColorUsages?: RecyclableColorUsage[];
+  recyclableTotals?: {
+    supportGrams: number;
+    towerGrams: number;
+    flushGrams: number;
+    recyclableGrams: number;
+    modelGrams?: number;
+  };
   printTime?: string;
   filamentWeight?: string;
   resinVolume?: string;
-  laborHours?: string;
   overheadPercentage?: string;
   markupPercentage?: string;
   [key: string]: string | number | boolean | undefined | object;
+}
+
+export interface LaborItemUsage {
+  id: string;
+  name: string;
+  type: string;
+  pricingModel: LaborPricingModel;
+  rate: number;
+  units: number;
+  cost: number;
+}
+
+export interface LaborConsumableUsage {
+  constantId: string;
+  name: string;
+  quantity: number;
+  unitCost: number;
+  cost: number;
+}
+
+export interface LaborMachineUsage {
+  machineId: string;
+  name: string;
+  hours: number;
+  rate: number;
+  cost: number;
+}
+
+export interface FilamentColorUsage {
+  tool: string;
+  color?: string;
+  material?: string;
+  materialId?: string;
+  spoolId?: string;
+  usedGrams: number;
+}
+
+export interface FilamentToolBreakdown {
+  tool: string;
+  color?: string;
+  material?: string;
+  materialId?: string;
+  spoolId?: string;
+  modelGrams: number;
+  supportGrams: number;
+  towerGrams: number;
+  flushGrams: number;
+  totalGrams: number;
+}
+
+export interface RecyclableColorUsage {
+  tool: string;
+  color?: string;
+  supportGrams: number;
+  towerGrams: number;
+  flushGrams: number;
+  recyclableGrams: number;
+}
+
+export interface LaborSelection {
+  laborItemId: string;
+  units: number;
+  consumables: { constantId: string; quantity: number }[];
+  machines: { machineId: string; hours: number }[];
 }
 
 export interface Material {
@@ -95,6 +195,10 @@ export interface Machine {
   id: string;
   name: string;
   hourly_cost: number;
+  machine_price?: number;
+  hours_per_day_usage?: number;
+  lifetime_years?: number;
+  maintenance_percentage?: number;
   power_consumption_watts: number | null;
   print_type: "FDM" | "Resin";
 }
@@ -115,7 +219,7 @@ export interface FDMFormData {
   machineId: string;
   printTime: string;
   filamentWeight: string;
-  laborHours: string;
+  laborSelections: LaborSelection[];
   overheadPercentage: string;
   markupPercentage: string;
   quantity: string;
@@ -127,13 +231,16 @@ export interface FDMFormData {
   priority?: string;
   dueDate?: string;
   assignedEmployeeId?: string; // ID of assigned employee
-  // Painting params (Beta)
-  paintingTime?: string; // Hours spent on painting labor
-  paintingLayers?: string; // Number of paint coats/layers
-  selectedPaintId?: string; // Selected paint consumable
-  selectedPaintId2?: string; // Secondary paint consumable
-  paintingLayers2?: string; // Number of coats for secondary paint
-  surfaceAreaCm2?: string; // Surface area in cm² (auto-filled from 3MF)
+  colorUsages?: FilamentColorUsage[];
+  toolBreakdown?: FilamentToolBreakdown[];
+  recyclableColorUsages?: RecyclableColorUsage[];
+  recyclableTotals?: {
+    supportGrams: number;
+    towerGrams: number;
+    flushGrams: number;
+    recyclableGrams: number;
+    modelGrams?: number;
+  };
 }
 
 export interface ResinFormData {
@@ -146,7 +253,7 @@ export interface ResinFormData {
   washingTime: string;
   curingTime: string;
   isopropylCost: string;
-  laborHours: string;
+  laborSelections: LaborSelection[];
   overheadPercentage: string;
   markupPercentage: string;
   quantity: string;
@@ -154,18 +261,13 @@ export interface ResinFormData {
   selectedSpoolId?: string; // Selected spool for inventory tracking
   customerId?: string;
   clientName?: string;
-  // Painting params (Beta)
-  paintingTime?: string; // Hours spent on painting labor
-  paintingLayers?: string; // Number of paint coats/layers
-  selectedPaintId?: string; // Selected paint consumable
-  selectedPaintId2?: string; // Secondary paint consumable
-  paintingLayers2?: string; // Number of coats for secondary paint
-  surfaceAreaCm2?: string; // Surface area in cm² (auto-filled from 3MF)
+  assignedEmployeeId?: string; // ID of assigned employee
 }
 
 export interface QuoteStats {
   totalQuotes: number;
   totalRevenue: number;
+  totalProfit: number;
   avgQuoteValue: number;
   fdmCount: number;
   resinCount: number;
@@ -243,5 +345,15 @@ export interface StoredGcode {
   materialName?: string;
   printType?: "FDM" | "Resin";
   thumbnail?: string;
+  colorUsages?: FilamentColorUsage[];
+  toolBreakdown?: FilamentToolBreakdown[];
+  recyclableColorUsages?: RecyclableColorUsage[];
+  recyclableTotals?: {
+    supportGrams: number;
+    towerGrams: number;
+    flushGrams: number;
+    recyclableGrams: number;
+    modelGrams?: number;
+  };
   createdAt: string;
 }

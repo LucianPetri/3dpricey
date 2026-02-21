@@ -7,7 +7,7 @@
 
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Database, Printer, Package, Users, Building2, UserCircle, Brush, FileCode } from "lucide-react";
+import { Database, Printer, Package, Users, Building2, UserCircle, FileCode, Hammer, Recycle } from "lucide-react";
 import MaterialsManager from "@/components/settings/MaterialsManager";
 
 import MachinesManager from "@/components/settings/MachinesManager";
@@ -15,6 +15,8 @@ import ConstantsManager from "@/components/settings/ConstantsManager";
 import SettingsExportImport from "@/components/settings/SettingsExportImport";
 import SettingsCRM from "@/components/settings/SettingsCRM";
 import SettingsEmployee from "@/components/settings/SettingsEmployee";
+import SettingsLabor from "@/components/settings/SettingsLabor";
+import RecyclableManager from "@/components/settings/RecyclableManager";
 import CompanySettings from "@/components/settings/CompanySettings";
 import GcodeManager from "@/components/settings/GcodeManager";
 import { useSearchParams, Link } from "react-router-dom";
@@ -120,6 +122,20 @@ const Settings = () => {
                   Employees
                 </TabsTrigger>
                 <TabsTrigger
+                  value="labor"
+                  className="data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-card rounded-lg px-5 py-2.5 transition-all duration-200"
+                >
+                  <Hammer className="w-4 h-4 mr-2" />
+                  Labor
+                </TabsTrigger>
+                <TabsTrigger
+                  value="recyclable"
+                  className="data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-card rounded-lg px-5 py-2.5 transition-all duration-200"
+                >
+                  <Recycle className="w-4 h-4 mr-2" />
+                  Recyclable
+                </TabsTrigger>
+                <TabsTrigger
                   value="company"
                   className="data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-card rounded-lg px-5 py-2.5 transition-all duration-200"
                 >
@@ -154,6 +170,14 @@ const Settings = () => {
 
             <TabsContent value="employees" className="p-6 mt-0 animate-fade-in">
               <SettingsEmployee />
+            </TabsContent>
+
+            <TabsContent value="labor" className="p-6 mt-0 animate-fade-in">
+              <SettingsLabor />
+            </TabsContent>
+
+            <TabsContent value="recyclable" className="p-6 mt-0 animate-fade-in">
+              <RecyclableManager />
             </TabsContent>
 
             <TabsContent value="company" className="p-6 mt-0 animate-fade-in">

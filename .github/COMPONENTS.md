@@ -63,6 +63,8 @@ const FDMForm = () => {
 - Always use `zodResolver` for validation
 - `defaultValues` from props or hooks
 - `onSubmit` should calculate quotes and add to batch
+- Calculator forms auto-save drafts to localStorage and expose a Reset Quote button
+- FDM no longer relies on top-level material/color selection; material mapping happens per detected filament row from parsed G-code.
 
 ### 2. Upload Components
 
@@ -199,6 +201,102 @@ export const SavedQuotesTable = ({ quotes, onEdit, onDelete }: SavedQuotesTableP
 - Callback functions for actions (edit, delete, export)
 - Use unique `key` (quote.id)
 - Use Shadcn `Table` components
+
+### Quote Summary Header
+
+**Component:** [src/components/quotes/QuoteSummary.tsx](../src/components/quotes/QuoteSummary.tsx)
+
+- The calculator summary header highlights **Profit** (`quote.markup`) rather than print type.
+- This keeps the primary KPI visible during quote creation.
+
+### Calculator Page Header
+
+**Page:** [src/pages/Index.tsx](../src/pages/Index.tsx)
+
+- Calculator tab labels use `FDM` and `Resin` (no `Printing` wording).
+- The tab header area shows a live **Profit** chip when a quote is calculated.
+
+### Quotes Dashboard Cards
+
+**Component:** [src/components/dashboard/QuotesDashboard.tsx](../src/components/dashboard/QuotesDashboard.tsx)
+
+- Replaced the old `Print Types` card with `Profit Made`.
+- `Profit Made` uses aggregated quote markup (`stats.totalProfit`).
+
+### Saved Quotes Displays
+
+**Files:**
+- [src/components/quotes/SavedQuotesTable.tsx](../src/components/quotes/SavedQuotesTable.tsx)
+- [src/components/saved-quotes/QuoteDetailsDialog.tsx](../src/components/saved-quotes/QuoteDetailsDialog.tsx)
+- [src/lib/pdfGenerator.ts](../src/lib/pdfGenerator.ts)
+
+- Replaced user-facing `Print Type` display slots with `Profit Made` on saved-quote table/details and generated PDF project details.
+- `Profit Made` uses quote-level markup (`quote.markup`).
+- `QuoteDetailsDialog` now renders color chips from mapped filament data (`toolBreakdown`/`colorUsages`) and shows a **Filament Mapping** list (tool + swatch + material).
+- Color parsing in details viewer accepts both comma- and semicolon-separated color strings for legacy quotes.
+- `QuoteDetailsDialog` uses a wider rectangular, two-column layout with a scrollable cost panel to keep long quotes readable without excessive modal height.
+
+### Machines Manager
+
+**Settings:** [src/components/settings/MachinesManager.tsx](../src/components/settings/MachinesManager.tsx)
+
+- Machine hourly cost is calculated from: machine price, hours per day usage, life time (years), and maintenance percentage.
+- The form shows a read-only calculated hourly cost field.
+- Stored machine data includes both inputs and the calculated `hourly_cost` used in calculations.
+
+### Recyclable Manager
+
+**Settings:** [src/components/settings/RecyclableManager.tsx](../src/components/settings/RecyclableManager.tsx)
+
+- Shows recyclable plastic totals by color across saved multicolor G-code projects.
+- Breaks totals into support, tower, flush, and combined recyclable grams.
+- Uses `HexColorSwatch` for color display with hover details.
+- Includes inventory context columns by color:
+  - `In Stock (g)` (aggregated from FDM spools)
+  - `Surplus (g)` = stock - recyclable total
+
+### FDM Filament Mapping Table
+
+**Calculator:** [src/components/calculator/FDMCalculatorTable.tsx](../src/components/calculator/FDMCalculatorTable.tsx)
+
+- Displays one row per detected tool (`T0`, `T1`, ...).
+- Each row shows Creality-style grams columns: `Model`, `Support`, `Tower`, `Flush`, `Total`.
+- Each row includes mapping controls:
+  - **Your Spool** (optional): map to owned spool/inventory entry.
+  - **Material** (required): map parsed filament to catalog material (auto-filled when possible, editable manually).
+- Quote validation now expects all detected filaments to have mapped materials.
+
+### Hex Color Display Pattern
+
+**Component:** [src/components/shared/HexColorSwatch.tsx](../src/components/shared/HexColorSwatch.tsx)
+
+- Use this component wherever a hex color value is displayed in the UI.
+- Renders a color circle and provides hover tooltip details including:
+  - HEX
+  - RGB
+  - HSL
+  - Alpha
+  - Decimal value
+- If value is not a valid hex color, it safely falls back to plain text.
+
+### 6. Labor Items & Tasks
+
+**Global Labor Settings:** [src/components/settings/SettingsLabor.tsx](../src/components/settings/SettingsLabor.tsx)
+
+- Manage the global catalog of labor items (name/type/pricing model/rate).
+- Each labor item can define default consumables (cost constants) and equipment (machines) per unit.
+
+**Employee Allow List:** [src/components/settings/SettingsEmployee.tsx](../src/components/settings/SettingsEmployee.tsx)
+
+- Each employee selects allowed labor items by ID.
+- Calculators filter labor options based on the assigned employee.
+
+**Calculator Labor Tasks:**
+- [src/components/calculator/FDMCalculatorTable.tsx](../src/components/calculator/FDMCalculatorTable.tsx)
+- [src/components/calculator/ResinCalculatorTable.tsx](../src/components/calculator/ResinCalculatorTable.tsx)
+- `Assigned Employee` controls allowed labor items.
+- Users add labor tasks with: labor item, units (hours or quantity), consumables, and equipment hours.
+- Each task is a structured entry in `laborSelections`.
 
 ### 5. Context Consumer Hook Pattern
 

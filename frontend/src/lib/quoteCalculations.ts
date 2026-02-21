@@ -5,13 +5,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { QuoteData, Material, Machine, FDMFormData, ResinFormData, CostConstant } from "@/types/quote";
+import { QuoteData, Material, Machine, FDMFormData, ResinFormData, CostConstant, LaborItem, LaborItemUsage, LaborConsumableUsage, LaborMachineUsage, LaborSelection } from "@/types/quote";
 
 interface CalculationParams {
   material: Material;
   machine: Machine;
   electricityRate: number;
-  laborRate: number;
 }
 
 interface ConsumableInfo {
@@ -22,8 +21,10 @@ interface ConsumableInfo {
 interface FDMCalculationInput extends CalculationParams {
   formData: FDMFormData;
   consumables?: ConsumableInfo[];
-  paintConsumable?: CostConstant;
-  paintConsumable2?: CostConstant;
+  materialsCatalog?: Material[];
+  laborItems: LaborItem[];
+  consumableConstants: CostConstant[];
+  machines: Machine[];
   customerId?: string;
   clientName?: string;
 }
@@ -31,84 +32,148 @@ interface FDMCalculationInput extends CalculationParams {
 interface ResinCalculationInput extends CalculationParams {
   formData: ResinFormData;
   consumables?: ConsumableInfo[];
-  paintConsumable?: CostConstant;
-  paintConsumable2?: CostConstant;
+  laborItems: LaborItem[];
+  consumableConstants: CostConstant[];
+  machines: Machine[];
   customerId?: string;
   clientName?: string;
 }
+
+const buildLaborTotals = (
+  laborSelections: LaborSelection[],
+  laborItems: LaborItem[],
+  consumableConstants: CostConstant[],
+  machines: Machine[]
+) => {
+  const laborItemsById = new Map(laborItems.map(item => [item.id, item]));
+  const consumablesById = new Map(consumableConstants.map(c => [c.id, c]));
+  const machinesById = new Map(machines.map(m => [m.id, m]));
+
+  const laborItemsUsed: LaborItemUsage[] = [];
+  const laborConsumablesUsedMap = new Map<string, LaborConsumableUsage>();
+  const laborMachinesUsedMap = new Map<string, LaborMachineUsage>();
+
+  let laborCost = 0;
+  let laborConsumablesCost = 0;
+  let laborMachineCost = 0;
+
+  laborSelections.forEach(selection => {
+    const laborItem = laborItemsById.get(selection.laborItemId);
+    if (!laborItem) return;
+
+    const units = Math.max(0, selection.units || 0);
+    const laborItemCost = laborItem.rate * units;
+    laborCost += laborItemCost;
+
+    laborItemsUsed.push({
+      id: laborItem.id,
+      name: laborItem.name,
+      type: laborItem.type,
+      pricingModel: laborItem.pricingModel,
+      rate: laborItem.rate,
+      units,
+      cost: laborItemCost,
+    });
+
+    selection.consumables.forEach(consumable => {
+      const constant = consumablesById.get(consumable.constantId);
+      if (!constant) return;
+      const quantity = Math.max(0, consumable.quantity || 0);
+      const cost = quantity * constant.value;
+      laborConsumablesCost += cost;
+      const existing = laborConsumablesUsedMap.get(consumable.constantId);
+      if (existing) {
+        existing.quantity += quantity;
+        existing.cost += cost;
+      } else {
+        laborConsumablesUsedMap.set(consumable.constantId, {
+          constantId: consumable.constantId,
+          name: constant.name,
+          quantity,
+          unitCost: constant.value,
+          cost,
+        });
+      }
+    });
+
+    selection.machines.forEach(machineEntry => {
+      const machine = machinesById.get(machineEntry.machineId);
+      if (!machine) return;
+      const hours = Math.max(0, machineEntry.hours || 0);
+      const cost = hours * machine.hourly_cost;
+      laborMachineCost += cost;
+      const existing = laborMachinesUsedMap.get(machineEntry.machineId);
+      if (existing) {
+        existing.hours += hours;
+        existing.cost += cost;
+      } else {
+        laborMachinesUsedMap.set(machineEntry.machineId, {
+          machineId: machineEntry.machineId,
+          name: machine.name,
+          hours,
+          rate: machine.hourly_cost,
+          cost,
+        });
+      }
+    });
+  });
+
+  return {
+    laborCost,
+    laborItemsUsed,
+    laborConsumablesCost,
+    laborConsumablesUsed: Array.from(laborConsumablesUsedMap.values()),
+    laborMachineCost,
+    laborMachinesUsed: Array.from(laborMachinesUsedMap.values()),
+  };
+};
 
 export const calculateFDMQuote = ({
   formData,
   material,
   machine,
   electricityRate,
-  laborRate,
   consumables = [],
-  paintConsumable,
-  paintConsumable2,
+  materialsCatalog = [],
+  laborItems,
+  consumableConstants,
+  machines,
   customerId,
   clientName,
 }: FDMCalculationInput): QuoteData => {
   const printTimeHours = parseFloat(formData.printTime);
   const filamentWeightKg = parseFloat(formData.filamentWeight) / 1000;
-  const laborHours = formData.laborHours ? parseFloat(formData.laborHours) : 0;
   const overheadPercentage = formData.overheadPercentage ? parseFloat(formData.overheadPercentage) : 0;
   const markupPercentage = parseFloat(formData.markupPercentage);
   const quantity = formData.quantity ? Math.max(1, parseInt(formData.quantity)) : 1;
+  const mappedMaterials = Array.from(new Set((formData.toolBreakdown || [])
+    .map(item => item.material)
+    .filter((name): name is string => !!name)));
+  const mappedColors = Array.from(new Set((formData.toolBreakdown || [])
+    .map(item => item.color)
+    .filter((name): name is string => !!name)));
 
-  const materialCost = filamentWeightKg * material.cost_per_unit;
+  const materialCostFromBreakdown = (formData.toolBreakdown || []).reduce((sum, toolItem) => {
+    const selectedMaterial = materialsCatalog.find(item => item.id === toolItem.materialId) || material;
+    return sum + ((toolItem.totalGrams || 0) / 1000) * selectedMaterial.cost_per_unit;
+  }, 0);
+
+  const materialCost = materialCostFromBreakdown > 0
+    ? materialCostFromBreakdown
+    : filamentWeightKg * material.cost_per_unit;
   const machineTimeCost = printTimeHours * machine.hourly_cost;
   const powerConsumptionKw = machine.power_consumption_watts ? machine.power_consumption_watts / 1000 : 0;
   const electricityCost = printTimeHours * powerConsumptionKw * electricityRate;
-  const laborCost = laborHours * laborRate;
   const consumablesTotal = consumables.reduce((sum, c) => sum + c.value, 0);
-
-  // Painting Calculation
-  const paintingTime = formData.paintingTime ? parseFloat(formData.paintingTime) : 0;
-  const paintingLayers = formData.paintingLayers ? parseInt(formData.paintingLayers) : 0;
-  // Painting fields removed from FormData, using flat consumable value
-  const surfaceAreaCm2 = formData.surfaceAreaCm2 ? parseFloat(formData.surfaceAreaCm2) : 0;
-  const surfaceAreaCm2ForStorage = surfaceAreaCm2; // Keep cm² value for storage
-
-  const paintingLaborCost = paintingTime * laborRate;
-
-  // Revised formula: Supports both flat rate AND calculated ($/ml) paints
-  let paintingMaterialCost = 0;
-
-  if (paintConsumable) {
-    // Check if it's a calculated paint ($/ml)
-    if (paintConsumable.unit === '$/ml' || paintConsumable.unit.includes('/ml')) {
-      // Extract usage rate from description (e.g. "Usage Rate: 0.02ml/cm2")
-      // matches "Usage Rate: 0.02" with optional unit suffix
-      const usageRateMatch = paintConsumable.description?.match(/Usage Rate:\s*([\d.]+)/i);
-      const usageRate = usageRateMatch ? parseFloat(usageRateMatch[1]) : 0.02; // Default to 0.02 if not found
-
-      paintingMaterialCost = paintConsumable.value * surfaceAreaCm2 * Math.max(1, paintingLayers) * usageRate;
-    } else {
-      // Flat rate
-      paintingMaterialCost = paintConsumable.value;
-    }
-  }
-
-  // Second Painting Calculation (Primary Paint)
-  // Re-use logic for second paint if present
-  let paintingMaterialCost2 = 0;
-  const paintingLayers2 = formData.paintingLayers2 ? parseInt(formData.paintingLayers2) : 0;
-
-  if (paintConsumable2) {
-    if (paintConsumable2.unit === '$/ml' || paintConsumable2.unit.includes('/ml')) {
-      const usageRateMatch = paintConsumable2.description?.match(/Usage Rate:\s*([\d.]+)/i);
-      const usageRate = usageRateMatch ? parseFloat(usageRateMatch[1]) : 0.02;
-
-      paintingMaterialCost2 = paintConsumable2.value * surfaceAreaCm2 * Math.max(1, paintingLayers2) * usageRate;
-    } else {
-      paintingMaterialCost2 = paintConsumable2.value;
-    }
-  }
-
-  const paintingCost = paintingLaborCost + paintingMaterialCost + paintingMaterialCost2;
-
-  const subtotalBeforeOverhead = materialCost + machineTimeCost + electricityCost + laborCost + consumablesTotal + paintingCost;
+  const laborSelections = formData.laborSelections || [];
+  const laborTotals = buildLaborTotals(laborSelections, laborItems, consumableConstants, machines);
+  const subtotalBeforeOverhead = materialCost
+    + machineTimeCost
+    + electricityCost
+    + laborTotals.laborCost
+    + laborTotals.laborConsumablesCost
+    + laborTotals.laborMachineCost
+    + consumablesTotal;
   const overheadCost = (subtotalBeforeOverhead * overheadPercentage) / 100;
   const subtotal = subtotalBeforeOverhead + overheadCost;
 
@@ -122,17 +187,18 @@ export const calculateFDMQuote = ({
     materialCost: materialCost * quantity,
     machineTimeCost: machineTimeCost * quantity,
     electricityCost: electricityCost * quantity,
-    laborCost: laborCost * quantity,
+    laborCost: laborTotals.laborCost * quantity,
+    laborConsumablesCost: laborTotals.laborConsumablesCost * quantity,
+    laborMachineCost: laborTotals.laborMachineCost * quantity,
     overheadCost: overheadCost * quantity,
     subtotal: subtotal * quantity,
     markup: markup * quantity,
-    paintingCost: paintingCost * quantity,
     unitPrice,
     quantity,
     totalPrice,
     printType: "FDM",
     projectName: formData.projectName,
-    printColour: formData.printColour,
+    printColour: mappedColors.length > 0 ? mappedColors.join(', ') : formData.printColour,
     filePath: formData.filePath, // Include file path for printing
     customerId,
     clientName,
@@ -141,14 +207,15 @@ export const calculateFDMQuote = ({
     assignedEmployeeId: formData.assignedEmployeeId,
     parameters: {
       ...formData,
-      materialName: material.name,
+      materialName: mappedMaterials.length > 0 ? mappedMaterials.join(', ') : material.name,
       machineName: machine.name,
       consumables,
       consumablesTotal,
-      paintConsumableValue: paintingMaterialCost,
-      paintConsumableValue2: paintingMaterialCost2,
+      laborItemsUsed: laborTotals.laborItemsUsed,
+      laborConsumablesUsed: laborTotals.laborConsumablesUsed,
+      laborMachinesUsed: laborTotals.laborMachinesUsed,
+      laborSelections,
     },
-    surfaceAreaCm2: surfaceAreaCm2ForStorage,
   };
 };
 
@@ -157,10 +224,10 @@ export const calculateResinQuote = ({
   material,
   machine,
   electricityRate,
-  laborRate,
   consumables = [],
-  paintConsumable,
-  paintConsumable2,
+  laborItems,
+  consumableConstants,
+  machines,
   customerId,
   clientName,
 }: ResinCalculationInput): QuoteData => {
@@ -169,7 +236,6 @@ export const calculateResinQuote = ({
   const washingTimeHours = formData.washingTime ? parseFloat(formData.washingTime) / 60 : 0;
   const curingTimeHours = formData.curingTime ? parseFloat(formData.curingTime) / 60 : 0;
   const isopropylCost = formData.isopropylCost ? parseFloat(formData.isopropylCost) : 0;
-  const laborHours = formData.laborHours ? parseFloat(formData.laborHours) : 0;
   const overheadPercentage = formData.overheadPercentage ? parseFloat(formData.overheadPercentage) : 0;
   const markupPercentage = parseFloat(formData.markupPercentage);
   const quantity = formData.quantity ? Math.max(1, parseInt(formData.quantity)) : 1;
@@ -179,48 +245,16 @@ export const calculateResinQuote = ({
   const machineTimeCost = totalProcessTime * machine.hourly_cost;
   const powerConsumptionKw = machine.power_consumption_watts ? machine.power_consumption_watts / 1000 : 0;
   const electricityCost = totalProcessTime * powerConsumptionKw * electricityRate;
-  const laborCost = laborHours * laborRate;
   const consumablesTotal = consumables.reduce((sum, c) => sum + c.value, 0);
-
-  // Painting Calculation
-  const paintingTime = formData.paintingTime ? parseFloat(formData.paintingTime) : 0;
-  const paintingLayers = formData.paintingLayers ? parseInt(formData.paintingLayers) : 0;
-  // Painting fields removed from FormData, using flat consumable value
-  const surfaceAreaCm2 = formData.surfaceAreaCm2 ? parseFloat(formData.surfaceAreaCm2) : 0;
-  const surfaceAreaCm2ForStorage = surfaceAreaCm2; // Keep cm² value for storage
-
-  const paintingLaborCost = paintingTime * laborRate;
-
-  // Primary Paint
-  let paintingMaterialCost = 0;
-
-  if (paintConsumable) {
-    if (paintConsumable.unit === '$/ml' || paintConsumable.unit.includes('/ml')) {
-      const usageRateMatch = paintConsumable.description?.match(/Usage Rate:\s*([\d.]+)/i);
-      const usageRate = usageRateMatch ? parseFloat(usageRateMatch[1]) : 0.02;
-      paintingMaterialCost = paintConsumable.value * surfaceAreaCm2 * Math.max(1, paintingLayers) * usageRate;
-    } else {
-      paintingMaterialCost = paintConsumable.value;
-    }
-  }
-
-  // Secondary Paint
-  let paintingMaterialCost2 = 0;
-  const paintingLayers2 = formData.paintingLayers2 ? parseInt(formData.paintingLayers2) : 0;
-
-  if (paintConsumable2) {
-    if (paintConsumable2.unit === '$/ml' || paintConsumable2.unit.includes('/ml')) {
-      const usageRateMatch = paintConsumable2.description?.match(/Usage Rate:\s*([\d.]+)/i);
-      const usageRate = usageRateMatch ? parseFloat(usageRateMatch[1]) : 0.02;
-      paintingMaterialCost2 = paintConsumable2.value * surfaceAreaCm2 * Math.max(1, paintingLayers2) * usageRate;
-    } else {
-      paintingMaterialCost2 = paintConsumable2.value;
-    }
-  }
-
-  const paintingCost = paintingLaborCost + paintingMaterialCost + paintingMaterialCost2;
-
-  const subtotalBeforeOverhead = materialCost + machineTimeCost + electricityCost + laborCost + consumablesTotal + paintingCost;
+  const laborSelections = formData.laborSelections || [];
+  const laborTotals = buildLaborTotals(laborSelections, laborItems, consumableConstants, machines);
+  const subtotalBeforeOverhead = materialCost
+    + machineTimeCost
+    + electricityCost
+    + laborTotals.laborCost
+    + laborTotals.laborConsumablesCost
+    + laborTotals.laborMachineCost
+    + consumablesTotal;
   const overheadCost = (subtotalBeforeOverhead * overheadPercentage) / 100;
   const subtotal = subtotalBeforeOverhead + overheadCost;
 
@@ -234,11 +268,12 @@ export const calculateResinQuote = ({
     materialCost: materialCost * quantity,
     machineTimeCost: machineTimeCost * quantity,
     electricityCost: electricityCost * quantity,
-    laborCost: laborCost * quantity,
+    laborCost: laborTotals.laborCost * quantity,
+    laborConsumablesCost: laborTotals.laborConsumablesCost * quantity,
+    laborMachineCost: laborTotals.laborMachineCost * quantity,
     overheadCost: overheadCost * quantity,
     subtotal: subtotal * quantity,
     markup: markup * quantity,
-    paintingCost: paintingCost * quantity,
     unitPrice,
     quantity,
     totalPrice,
@@ -247,27 +282,29 @@ export const calculateResinQuote = ({
     printColour: formData.printColour,
     customerId,
     clientName,
+    assignedEmployeeId: formData.assignedEmployeeId,
     parameters: {
       ...formData,
       materialName: material.name,
       machineName: machine.name,
       consumables,
       consumablesTotal,
-      paintingTime,
-      paintingLayers,
-      paintingLayers2,
-      paintConsumableValue: paintingMaterialCost,
-      paintConsumableValue2: paintingMaterialCost2,
-      surfaceAreaCm2: formData.surfaceAreaCm2 ? parseFloat(formData.surfaceAreaCm2) : undefined,
+      laborItemsUsed: laborTotals.laborItemsUsed,
+      laborConsumablesUsed: laborTotals.laborConsumablesUsed,
+      laborMachinesUsed: laborTotals.laborMachinesUsed,
+      laborSelections,
     },
-    surfaceAreaCm2: surfaceAreaCm2ForStorage,
   };
 };
 
 export const validateFDMForm = (formData: FDMFormData): string | null => {
   if (!formData.projectName.trim()) return "Project name is required";
   if (formData.projectName.length > 100) return "Project name is too long (max 100 chars)";
-  if (!formData.materialId) return "Please select a material";
+
+  const toolBreakdown = formData.toolBreakdown || [];
+  if (toolBreakdown.length === 0) return "Upload G-code and map detected filaments to your materials";
+  if (toolBreakdown.some(item => !item.materialId)) return "Please map a material for each detected filament";
+
   if (!formData.machineId) return "Please select a machine";
 
   const printTime = parseFloat(formData.printTime);
@@ -278,7 +315,7 @@ export const validateFDMForm = (formData: FDMFormData): string | null => {
   if (isNaN(weight) || weight <= 0) return "Filament weight must be greater than 0";
   if (weight > 50000) return "Filament weight exceeds maximum (50000g)";
 
-  if (formData.laborHours && parseFloat(formData.laborHours) > 1000) return "Labor hours exceed maximum (1000h)";
+  if (formData.laborSelections.some(selection => selection.units > 1000)) return "Labor units exceed maximum (1000)";
   if (formData.overheadPercentage && parseFloat(formData.overheadPercentage) > 1000) return "Overhead exceeds maximum (1000%)";
   if (formData.markupPercentage && parseFloat(formData.markupPercentage) > 10000) return "Markup exceeds maximum (10000%)";
 
@@ -291,7 +328,6 @@ export const validateFDMForm = (formData: FDMFormData): string | null => {
 
 export const validateResinForm = (formData: ResinFormData): string | null => {
   if (!formData.projectName.trim()) return "Project name is required";
-  if (formData.projectName.length > 100) return "Project name is too long (max 100 chars)";
   if (!formData.materialId) return "Please select a material";
   if (!formData.machineId) return "Please select a machine";
 
@@ -303,7 +339,7 @@ export const validateResinForm = (formData: ResinFormData): string | null => {
   if (isNaN(volume) || volume <= 0) return "Resin volume must be greater than 0";
   if (volume > 50000) return "Resin volume exceeds maximum (50000ml)";
 
-  if (formData.laborHours && parseFloat(formData.laborHours) > 1000) return "Labor hours exceed maximum (1000h)";
+  if (formData.laborSelections.some(selection => selection.units > 1000)) return "Labor units exceed maximum (1000)";
   if (formData.overheadPercentage && parseFloat(formData.overheadPercentage) > 1000) return "Overhead exceeds maximum (1000%)";
   if (formData.markupPercentage && parseFloat(formData.markupPercentage) > 10000) return "Markup exceeds maximum (10000%)";
 

@@ -8,12 +8,16 @@
 ## Supported File Formats
 
 ### 1. G-Code (.gcode)
-**Parser:** [gcodeParser.ts](../src/lib/parsers/gcodeParser.ts) (500 lines)  
+**Parser:** [gcodeParser.ts](../src/lib/parsers/gcodeParser.ts)  
 **Usage:** FDM calculator
 
 **Extracted Data:**
 - `printTimeHours` – Estimated print duration
 - `filamentWeightGrams` – Material weight
+- `colorUsages[]` – Per-tool filament usage (grams) for multicolor prints
+- `toolBreakdown[]` – Per-tool full breakdown: model/support/tower/flush/total + mapped material info
+- `recyclableColorUsages[]` – Per-tool recyclable breakdown (support/tower/flush)
+- `recyclableTotals` – Aggregated support/tower/flush/model grams
 - `filamentLengthMm` – Optional filament length in mm
 - `printerModel` – Slicer-reported printer model
 - `filamentColour` – Material color from slicer metadata
@@ -25,6 +29,7 @@
 - Cura (`;TIME:` seconds format, `; MODEL_ID:`)
 - PrusaSlicer (`;estimated printing time` in HH:MM:SS)
 - Simplify3D (`;Estimated Printing Time:` format)
+- Creality Print / Orca-based multicolor metadata (`; filament used [g] = ...`, `; filament_colour = ...`)
 
 ### 2. 3MF (.3mf)
 **Parser:** Part of [gcodeParser.ts](../src/lib/parsers/gcodeParser.ts)  
@@ -99,6 +104,46 @@ for (const pattern of weightPatterns) {
 }
 ```
 
+### Multicolor & Recyclable Extraction
+
+For multicolor jobs, parser reads per-tool metadata:
+
+```text
+; filament used [g] = 17.37, 41.58, 1.54, 6.80
+; filament_colour = #FFFFFF;#000000;#FF0000;#808080
+; filament_type = PLA;PLA;PLA;PLA
+```
+
+For recyclable buckets, parser estimates extrusion by category using section markers:
+
+```text
+;TYPE:Support
+;TYPE:Prime tower
+; WIPE_TOWER_START / ; WIPE_TOWER_END
+; CP TOOLCHANGE WIPE / ; CP TOOLCHANGE END
+```
+
+Extrusion length is converted to grams using `filament_density` + `filament_diameter` metadata when available.
+
+### Creality-specific Accuracy Notes
+
+- Some Creality exports expose `; filament used [g] = ...` as **model-only** grams and do not include support/tower/flush in that metadata line.
+- Parser now computes a full extrusion breakdown (`model + support + tower + flush`) from toolpaths and section markers.
+- For Creality multicolor files, flushed grams are derived from `flush_volumes_matrix` + real toolchange sequence (`T0..Tn`) and merged into per-tool totals.
+- When Creality wipe/tower markers are present and computed total is materially higher than metadata totals, parser uses computed per-tool totals as `colorUsages[]` and uses computed total as `filamentWeightGrams`.
+
+### Numeric Token Parsing
+
+G-code extrusion tokens can be emitted as any of the following forms:
+
+```text
+E1.234
+E.8741
+E-.42
+```
+
+Parser now supports all three forms for both movement (`G0/G1`) and reset (`G92 E...`) parsing to avoid undercounting flush/tower/support volumes.
+
 ### Edge Case Handling
 
 1. **Missing Metadata:** Return zeros with error message
@@ -161,9 +206,9 @@ if (gcodeData.filamentWeightGrams) {
 if (gcodeData.printTimeHours) {
   setPrintTime(gcodeData.printTimeHours.toString());
 }
-if (gcodeData.surfaceAreaMm2) {
-  setSurfaceAreaCm2((gcodeData.surfaceAreaMm2 / 100).toString());
-}
+// Optional multicolor/recyclable data is also copied into form state
+setColorUsages(gcodeData.colorUsages || []);
+setRecyclableTotals(gcodeData.recyclableTotals);
 ```
 
 ## Thumbnail Extraction
@@ -245,6 +290,8 @@ if (thumbFile) {
 ### Test Checklist
 - [ ] Print time extracted correctly in hours
 - [ ] Filament weight in grams (not kg)
+- [ ] Multicolor per-tool usage parsed correctly
+- [ ] Recyclable support/tower/flush totals populated for multicolor files
 - [ ] Thumbnail displays correctly
 - [ ] Missing fields return zero (not undefined)
 - [ ] Multiple files in batch upload process

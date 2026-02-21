@@ -150,7 +150,7 @@ const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplica
       { header: "S.No", key: "sno", width: 8 },
       { header: "Project Name", key: "projectName", width: 25 },
       { header: "Client", key: "clientName", width: 20 },
-      { header: "Print Type", key: "printType", width: 12 },
+      { header: "Profit Made", key: "profitMade", width: 15 },
       { header: "Colour", key: "printColour", width: 15 },
       { header: "Material", key: "materialName", width: 20 },
       { header: "Machine", key: "machineName", width: 20 },
@@ -172,7 +172,7 @@ const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplica
         sno: index + 1,
         projectName: quote.projectName,
         clientName: quote.clientName || "",
-        printType: quote.printType,
+        profitMade: formatPrice(quote.markup),
         printColour: quote.printColour,
         materialName: quote.parameters.materialName,
         machineName: quote.parameters.machineName,
@@ -280,7 +280,7 @@ const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplica
                 <TableHead className="w-12 font-semibold text-foreground">S.No</TableHead>
                 <TableHead className="font-semibold text-foreground">Project Name</TableHead>
                 <TableHead className="font-semibold text-foreground">Client</TableHead>
-                <TableHead className="font-semibold text-foreground">Type</TableHead>
+                <TableHead className="font-semibold text-foreground">Profit Made</TableHead>
                 <TableHead className="font-semibold text-foreground">Status</TableHead>
                 <TableHead className="font-semibold text-foreground">Priority</TableHead>
                 <TableHead className="font-semibold text-foreground">Due Date</TableHead>
@@ -303,12 +303,7 @@ const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplica
                       <TableCell className="font-semibold text-foreground">{quote.projectName}</TableCell>
                       <TableCell className="text-muted-foreground">{quote.clientName || "-"}</TableCell>
                       <TableCell>
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${quote.printType === "FDM"
-                          ? "bg-primary/10 text-primary"
-                          : "bg-accent/10 text-accent"
-                          }`}>
-                          {quote.printType}
-                        </span>
+                        <span className="font-semibold text-foreground tabular-nums">{formatPrice(quote.markup)}</span>
                       </TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusStyle(quote.status)}`}>

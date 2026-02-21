@@ -13,12 +13,13 @@ import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, Pencil, Users, Search } from "lucide-react";
-import { Employee } from "@/types/quote";
-import { getEmployees, saveEmployee, deleteEmployee } from "@/lib/core/sessionStorage";
+import { Employee, LaborItem } from "@/types/quote";
+import { getEmployees, saveEmployee, deleteEmployee, getLaborItems } from "@/lib/core/sessionStorage";
 import { toast } from "sonner";
 
 const SettingsEmployee = memo(() => {
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [laborItems, setLaborItems] = useState<LaborItem[]>([]);
     const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -28,19 +29,25 @@ const SettingsEmployee = memo(() => {
         jobPosition: "",
         email: "",
         phone: "",
+        allowedLaborItemIds: [] as string[],
     });
 
     const loadEmployees = useCallback(() => {
         setEmployees(getEmployees());
     }, []);
 
+    const loadLaborItems = useCallback(() => {
+        setLaborItems(getLaborItems());
+    }, []);
+
     useEffect(() => {
         loadEmployees();
-    }, [loadEmployees]);
+        loadLaborItems();
+    }, [loadEmployees, loadLaborItems]);
 
     const resetForm = () => {
         setEditingEmployee(null);
-        setFormData({ name: "", jobPosition: "", email: "", phone: "" });
+        setFormData({ name: "", jobPosition: "", email: "", phone: "", allowedLaborItemIds: [] });
         setIsDialogOpen(false);
     };
 
@@ -50,6 +57,7 @@ const SettingsEmployee = memo(() => {
             jobPosition: employee.jobPosition,
             email: employee.email || "",
             phone: employee.phone || "",
+            allowedLaborItemIds: employee.allowedLaborItemIds || [],
         });
         setEditingEmployee(employee);
         setIsDialogOpen(true);
@@ -57,8 +65,20 @@ const SettingsEmployee = memo(() => {
 
     const handleAddNew = () => {
         setEditingEmployee(null);
-        setFormData({ name: "", jobPosition: "", email: "", phone: "" });
+        setFormData({ name: "", jobPosition: "", email: "", phone: "", allowedLaborItemIds: [] });
         setIsDialogOpen(true);
+    };
+
+    const toggleLaborItem = (id: string) => {
+        setFormData(prev => {
+            const exists = prev.allowedLaborItemIds.includes(id);
+            return {
+                ...prev,
+                allowedLaborItemIds: exists
+                    ? prev.allowedLaborItemIds.filter(itemId => itemId !== id)
+                    : [...prev.allowedLaborItemIds, id],
+            };
+        });
     };
 
     const handleSaveEmployee = (e?: React.FormEvent) => {
@@ -80,6 +100,7 @@ const SettingsEmployee = memo(() => {
                 jobPosition: formData.jobPosition,
                 email: formData.email || undefined,
                 phone: formData.phone || undefined,
+                allowedLaborItemIds: formData.allowedLaborItemIds,
             });
 
             toast.success(editingEmployee ? "Employee updated" : "Employee added");
@@ -260,6 +281,27 @@ const SettingsEmployee = memo(() => {
                                     className="bg-background"
                                 />
                             </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <Label className="text-sm font-medium">Allowed Labor Items</Label>
+                            {laborItems.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No labor items available. Add some in Settings → Labor.</p>
+                            ) : (
+                                <div className="grid md:grid-cols-2 gap-2">
+                                    {laborItems.map(item => (
+                                        <label key={item.id} className="flex items-center gap-2 text-sm">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.allowedLaborItemIds.includes(item.id)}
+                                                onChange={() => toggleLaborItem(item.id)}
+                                                className="h-4 w-4"
+                                            />
+                                            <span>{item.name} ({item.type})</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         <DialogFooter>

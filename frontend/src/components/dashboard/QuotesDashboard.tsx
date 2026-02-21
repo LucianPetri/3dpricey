@@ -8,7 +8,7 @@
 import { memo } from "react";
 import { QuoteStats } from "@/types/quote";
 import { StatsCard } from "./StatsCard";
-import { FileText, TrendingUp, Printer, Clock } from "lucide-react";
+import { FileText, TrendingUp, Clock, CircleDollarSign } from "lucide-react";
 import { useCurrency } from "@/hooks/useCurrency";
 
 interface QuotesDashboardProps {
@@ -38,10 +38,10 @@ export const QuotesDashboard = memo(({ stats }: QuotesDashboardProps) => {
         icon={Clock}
       />
       <StatsCard
-        title="Print Types"
-        value={`${stats.fdmCount}/${stats.resinCount}`}
-        subtitle="FDM / Resin"
-        icon={Printer}
+        title="Profit Made"
+        value={`${currency.symbol}${stats.totalProfit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+        subtitle="Total markup"
+        icon={CircleDollarSign}
         variant="accent"
       />
     </div>

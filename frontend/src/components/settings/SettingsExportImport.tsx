@@ -127,7 +127,7 @@ const SettingsExportImport = ({ onSettingsChanged }: SettingsExportImportProps) 
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                    Exported file includes: Materials, Machines, Consumables, and Customers. Importing will replace all existing settings.
+                    Exported file includes: Materials, Machines, Consumables, Labor items, and Customers. Importing will replace all existing settings.
                 </p>
             </div>
         </Card>

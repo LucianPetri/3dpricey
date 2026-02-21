@@ -5,24 +5,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { useState, useCallback, useMemo, memo, useEffect, useRef } from "react";
-import { Calculator, Save } from "lucide-react";
+import { useState, useCallback, useMemo, memo, useEffect } from "react";
+import { Calculator, Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { QuoteData, ResinFormData, StoredGcode } from "@/types/quote";
+import { QuoteData, ResinFormData, StoredGcode, LaborItem, Machine } from "@/types/quote";
 import { useCalculatorData } from "@/hooks/useCalculatorData";
 import { calculateResinQuote, validateResinForm } from "@/lib/quoteCalculations";
 import { QuoteCalculator } from "./QuoteCalculator";
 import { FormFieldRow, TextField, SelectField } from "./FormField";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ConsumablesSelector } from "./ConsumablesSelector";
 import { SpoolSelector } from "./SpoolSelector";
 import ResinFileUpload from "./ResinFileUpload";
 import { ResinFileData } from "@/lib/parsers/resinFileParser";
 import { useCurrency } from "@/hooks/useCurrency";
 import { ClientSelector } from "@/components/shared/ClientSelector";
-import { SurfaceAreaUpload } from "./SurfaceAreaUpload";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStoredGcodes } from "@/hooks/useStoredGcodes";
+import { Employee } from "@/types/quote";
+import { getEmployees, getLaborItems, getMachines, getResinCalculatorDraft, saveResinCalculatorDraft, clearResinCalculatorDraft } from "@/lib/core/sessionStorage";
 
 interface ResinCalculatorProps {
   onCalculate: (data: QuoteData) => void;
@@ -38,15 +41,12 @@ const initialFormData: ResinFormData = {
   washingTime: "",
   curingTime: "",
   isopropylCost: "",
-  laborHours: "",
+  laborSelections: [],
   overheadPercentage: "",
   markupPercentage: "20",
   quantity: "1",
   selectedConsumableIds: [],
-  paintingTime: "",
-  paintingLayers: "",
-  selectedPaintId: "",
-  surfaceAreaCm2: "",
+  assignedEmployeeId: "",
 };
 
 const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
@@ -55,6 +55,55 @@ const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
   const [selectedSpoolId, setSelectedSpoolId] = useState<string>("");
   const { currency } = useCurrency();
   const { gcodes, saveGcode } = useStoredGcodes();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [laborItems, setLaborItems] = useState<LaborItem[]>([]);
+  const [allMachines, setAllMachines] = useState<Machine[]>([]);
+
+  useEffect(() => {
+    setEmployees(getEmployees());
+    setLaborItems(getLaborItems());
+    setAllMachines(getMachines());
+  }, []);
+
+  useEffect(() => {
+    const draft = getResinCalculatorDraft<ResinFormData>();
+    if (!draft?.formData) return;
+    setFormData({
+      ...initialFormData,
+      ...draft.formData,
+      laborSelections: draft.formData.laborSelections || [],
+      selectedConsumableIds: draft.formData.selectedConsumableIds || [],
+    });
+    setSelectedSpoolId(draft.selectedSpoolId || "");
+  }, []);
+
+  useEffect(() => {
+    saveResinCalculatorDraft({ formData, selectedSpoolId });
+  }, [formData, selectedSpoolId]);
+
+  const selectedEmployee = useMemo(() => {
+    if (!formData.assignedEmployeeId) return undefined;
+    return employees.find(e => e.id === formData.assignedEmployeeId);
+  }, [employees, formData.assignedEmployeeId]);
+
+  const allowedLaborItems = useMemo(() => {
+    if (!selectedEmployee?.allowedLaborItemIds?.length) return laborItems;
+    const allowedIds = new Set(selectedEmployee.allowedLaborItemIds);
+    return laborItems.filter(item => allowedIds.has(item.id));
+  }, [laborItems, selectedEmployee]);
+
+  const laborOptions = useMemo(() => {
+    return [
+      { id: "none", label: "-- None --" },
+      ...allowedLaborItems.map(item => ({
+        id: item.id,
+        label: `${item.name} (${item.type})`,
+        sublabel: item.pricingModel === "hourly"
+          ? `${currency.symbol}${item.rate}/hr`
+          : `${currency.symbol}${item.rate} flat`,
+      })),
+    ];
+  }, [allowedLaborItems, currency.symbol]);
 
   // Filter for Resin files only
   const filteredGcodes = useMemo(() => {
@@ -68,15 +117,6 @@ const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
     resinVolumeMl: number;
     printerModel?: string;
   } | null>(null);
-
-  const [isPaintingEnabled, setIsPaintingEnabled] = useState(false);
-
-  // Sync isPaintingEnabled with initial data if needed
-  useEffect(() => {
-    if (formData.paintingLayers && parseInt(formData.paintingLayers) > 0 && !isPaintingEnabled) {
-      setIsPaintingEnabled(true);
-    }
-  }, [formData.paintingLayers, isPaintingEnabled]);
 
   const updateField = useCallback(<K extends keyof ResinFormData>(field: K, value: ResinFormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -123,6 +163,117 @@ const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
       toast.info(`Selected ${selectedIds.length} consumables (Total: ${currency.symbol}${totalValue.toFixed(2)})`);
     }
   }, [constants, updateField, currency]);
+
+  const addLaborSelection = useCallback(() => {
+    setFormData(prev => ({
+      ...prev,
+      laborSelections: [...prev.laborSelections, { laborItemId: "", units: 0, consumables: [], machines: [] }],
+    }));
+  }, []);
+
+  const removeLaborSelection = useCallback((index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      laborSelections: prev.laborSelections.filter((_, i) => i !== index),
+    }));
+  }, []);
+
+  const updateLaborUnits = useCallback((index: number, units: number) => {
+    setFormData(prev => {
+      const updated = [...prev.laborSelections];
+      updated[index] = { ...updated[index], units };
+      return { ...prev, laborSelections: updated };
+    });
+  }, []);
+
+  const handleLaborItemChange = useCallback((index: number, laborItemId: string) => {
+    setFormData(prev => {
+      const updated = [...prev.laborSelections];
+      const laborItem = laborItems.find(item => item.id === laborItemId);
+      updated[index] = {
+        ...updated[index],
+        laborItemId,
+        units: updated[index].units || 0,
+        consumables: laborItem
+          ? laborItem.consumables.map(item => ({ constantId: item.constantId, quantity: item.quantityPerUnit }))
+          : [],
+        machines: laborItem
+          ? laborItem.machines.map(item => ({ machineId: item.machineId, hours: item.hoursPerUnit }))
+          : [],
+      };
+      return { ...prev, laborSelections: updated };
+    });
+  }, [laborItems]);
+
+  const addLaborConsumable = useCallback((index: number) => {
+    setFormData(prev => {
+      const updated = [...prev.laborSelections];
+      const selection = updated[index];
+      updated[index] = { ...selection, consumables: [...selection.consumables, { constantId: "", quantity: 0 }] };
+      return { ...prev, laborSelections: updated };
+    });
+  }, []);
+
+  const updateLaborConsumable = useCallback((selectionIndex: number, consumableIndex: number, field: "constantId" | "quantity", value: string | number) => {
+    setFormData(prev => {
+      const updated = [...prev.laborSelections];
+      const selection = updated[selectionIndex];
+      const consumables = [...selection.consumables];
+      consumables[consumableIndex] = { ...consumables[consumableIndex], [field]: value };
+      updated[selectionIndex] = { ...selection, consumables };
+      return { ...prev, laborSelections: updated };
+    });
+  }, []);
+
+  const removeLaborConsumable = useCallback((selectionIndex: number, consumableIndex: number) => {
+    setFormData(prev => {
+      const updated = [...prev.laborSelections];
+      const selection = updated[selectionIndex];
+      updated[selectionIndex] = { ...selection, consumables: selection.consumables.filter((_, i) => i !== consumableIndex) };
+      return { ...prev, laborSelections: updated };
+    });
+  }, []);
+
+  const addLaborMachine = useCallback((index: number) => {
+    setFormData(prev => {
+      const updated = [...prev.laborSelections];
+      const selection = updated[index];
+      updated[index] = { ...selection, machines: [...selection.machines, { machineId: "", hours: 0 }] };
+      return { ...prev, laborSelections: updated };
+    });
+  }, []);
+
+  const updateLaborMachine = useCallback((selectionIndex: number, machineIndex: number, field: "machineId" | "hours", value: string | number) => {
+    setFormData(prev => {
+      const updated = [...prev.laborSelections];
+      const selection = updated[selectionIndex];
+      const machinesList = [...selection.machines];
+      machinesList[machineIndex] = { ...machinesList[machineIndex], [field]: value };
+      updated[selectionIndex] = { ...selection, machines: machinesList };
+      return { ...prev, laborSelections: updated };
+    });
+  }, []);
+
+  const removeLaborMachine = useCallback((selectionIndex: number, machineIndex: number) => {
+    setFormData(prev => {
+      const updated = [...prev.laborSelections];
+      const selection = updated[selectionIndex];
+      updated[selectionIndex] = { ...selection, machines: selection.machines.filter((_, i) => i !== machineIndex) };
+      return { ...prev, laborSelections: updated };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedEmployee?.allowedLaborItemIds?.length) return;
+    const allowed = new Set(selectedEmployee.allowedLaborItemIds);
+    setFormData(prev => {
+      const updated = prev.laborSelections.map(selection => {
+        if (!selection.laborItemId || allowed.has(selection.laborItemId)) return selection;
+        return { ...selection, laborItemId: "", units: 0, consumables: [], machines: [] };
+      });
+      return { ...prev, laborSelections: updated };
+    });
+  }, [selectedEmployee]);
 
   const handleSavedGcodeSelect = useCallback((fileId: string) => {
     const file = gcodes.find(f => f.id === fileId);
@@ -201,43 +352,43 @@ const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
 
     // Validate mandatory constants
     const electricityRate = getConstantValue("electricity");
-    const laborRate = getConstantValue("labor");
-
-    const selectedPaintConsumable = constants.find(c => c.id === formData.selectedPaintId);
-    const paintConsumableValue = selectedPaintConsumable ? selectedPaintConsumable.value : 0;
-
     if (!electricityRate || electricityRate <= 0) {
       toast.error("Electricity Rate is required. Please set it in Settings → Consumables.");
       return;
     }
 
-    if (!laborRate || laborRate <= 0) {
-      toast.error("Labor Rate is required. Please set it in Settings → Consumables.");
+    const invalidSelection = formData.laborSelections.find(selection => !selection.laborItemId || selection.units <= 0);
+    if (invalidSelection) {
+      toast.error("Each labor selection must include a labor item and units.");
       return;
     }
-
-    const selectedPaint = formData.selectedPaintId ? constants.find(c => c.id === formData.selectedPaintId) : undefined;
-    const selectedPaint2 = formData.selectedPaintId2 ? constants.find(c => c.id === formData.selectedPaintId2) : undefined;
 
     const quoteData = calculateResinQuote({
       formData: {
         ...formData,
-        selectedSpoolId: selectedSpoolId || undefined, // Ensure spool ID is passed
+        selectedSpoolId: selectedSpoolId || undefined,
       },
       material: selectedMaterial,
       machine: selectedMachine,
       electricityRate: electricityRate,
-      laborRate: laborRate,
       consumables: selectedConsumables,
-      paintConsumable: selectedPaint, // Pass the full object
-      paintConsumable2: selectedPaint2, // Pass secondary paint
+      laborItems,
+      consumableConstants: constants,
+      machines: allMachines,
       customerId: formData.customerId,
       clientName: formData.clientName,
     });
 
     onCalculate(quoteData);
     toast.success("Quote calculated successfully!");
-  }, [formData, selectedSpoolId, materials, machines, constants, getConstantValue, onCalculate]);
+  }, [formData, selectedSpoolId, materials, machines, constants, getConstantValue, onCalculate, laborItems, allMachines]);
+
+  const handleReset = useCallback(() => {
+    setFormData(initialFormData);
+    setSelectedSpoolId("");
+    setCurrentGcodeData(null);
+    clearResinCalculatorDraft();
+  }, []);
 
   const materialOptions = useMemo(() =>
     materials.map(m => ({
@@ -314,7 +465,7 @@ const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
   );
 
   return (
-    <QuoteCalculator loading={loading} onCalculate={calculateQuote} uploadSection={uploadSection}>
+    <QuoteCalculator loading={loading} onCalculate={calculateQuote} onReset={handleReset} uploadSection={uploadSection}>
       <FormFieldRow label="Project Name" htmlFor="project-name" required>
         <TextField
           id="project-name"
@@ -459,18 +610,178 @@ const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
         />
       </FormFieldRow>
 
-      <FormFieldRow label="Labor Hours" htmlFor="resin-labor-hours">
-        <TextField
-          id="resin-labor-hours"
-          name="laborHours"
-          type="number"
-          step="0.1"
-          value={formData.laborHours}
-          onChange={(v) => updateField("laborHours", v)}
-          placeholder="1.0"
-          min={0}
-          max={1000}
+      <FormFieldRow label="Assigned Employee" htmlFor="resin-assigned-employee">
+        <SelectField
+          id="resin-assigned-employee"
+          name="assignedEmployeeId"
+          value={formData.assignedEmployeeId || "none"}
+          onChange={(v) => {
+            const employeeId = v === "none" ? "" : v;
+            updateField("assignedEmployeeId", employeeId);
+            if (!employeeId) {
+              updateField("laborSelections", []);
+            }
+          }}
+          options={[
+            { id: "none", label: "-- Select Employee --" },
+            ...employees.map(e => ({ id: e.id, label: `${e.name} (${e.jobPosition})` }))
+          ]}
+          placeholder="Select employee"
         />
+      </FormFieldRow>
+
+      <FormFieldRow label="Labor Tasks" htmlFor="resin-labor-tasks">
+        <div className="space-y-3" id="resin-labor-tasks">
+          {formData.laborSelections.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No labor tasks added.</p>
+          ) : (
+            <div className="space-y-4">
+              {formData.laborSelections.map((selection, index) => {
+                const laborItem = laborItems.find(item => item.id === selection.laborItemId);
+                const unitsLabel = laborItem?.pricingModel === "flat" ? "Quantity" : "Hours";
+
+                return (
+                  <div key={`labor-${index}`} className="rounded-lg border border-border/60 bg-muted/10 p-3 space-y-3">
+                    <div className="grid md:grid-cols-[1fr_160px_40px] gap-2 items-center">
+                      <SelectField
+                        value={selection.laborItemId || "none"}
+                        onChange={(value) => handleLaborItemChange(index, value === "none" ? "" : value)}
+                        placeholder="Select labor item"
+                        options={laborOptions}
+                      />
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min={0}
+                        value={selection.units}
+                        onChange={(e) => updateLaborUnits(index, parseFloat(e.target.value) || 0)}
+                        placeholder={unitsLabel}
+                        className="bg-background"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => removeLaborSelection(index)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium">Consumables</Label>
+                        <Button type="button" variant="outline" size="sm" onClick={() => addLaborConsumable(index)}>
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                      {selection.consumables.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No consumables.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {selection.consumables.map((consumable, consumableIndex) => (
+                            <div key={`consumable-${index}-${consumableIndex}`} className="grid md:grid-cols-[1fr_140px_40px] gap-2 items-center">
+                              <Select
+                                value={consumable.constantId || "none"}
+                                onValueChange={(value) => updateLaborConsumable(index, consumableIndex, "constantId", value === "none" ? "" : value)}
+                              >
+                                <SelectTrigger className="bg-background">
+                                  <SelectValue placeholder="Select consumable" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">-- None --</SelectItem>
+                                  {constants.map(c => (
+                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={consumable.quantity}
+                                onChange={(e) => updateLaborConsumable(index, consumableIndex, "quantity", parseFloat(e.target.value) || 0)}
+                                placeholder="Qty"
+                                className="bg-background"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => removeLaborConsumable(index, consumableIndex)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium">Equipment</Label>
+                        <Button type="button" variant="outline" size="sm" onClick={() => addLaborMachine(index)}>
+                          <Plus className="w-4 h-4 mr-1" />
+                          Add
+                        </Button>
+                      </div>
+                      {selection.machines.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No equipment.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {selection.machines.map((machineEntry, machineIndex) => (
+                            <div key={`machine-${index}-${machineIndex}`} className="grid md:grid-cols-[1fr_140px_40px] gap-2 items-center">
+                              <Select
+                                value={machineEntry.machineId || "none"}
+                                onValueChange={(value) => updateLaborMachine(index, machineIndex, "machineId", value === "none" ? "" : value)}
+                              >
+                                <SelectTrigger className="bg-background">
+                                  <SelectValue placeholder="Select machine" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">-- None --</SelectItem>
+                                  {allMachines.map(machineOption => (
+                                    <SelectItem key={machineOption.id} value={machineOption.id}>{machineOption.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={machineEntry.hours}
+                                onChange={(e) => updateLaborMachine(index, machineIndex, "hours", parseFloat(e.target.value) || 0)}
+                                placeholder="Hours"
+                                className="bg-background"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => removeLaborMachine(index, machineIndex)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={addLaborSelection}>
+            <Plus className="w-4 h-4 mr-1" />
+            Add Labor Task
+          </Button>
+        </div>
       </FormFieldRow>
 
       <FormFieldRow label="Overhead (%)" htmlFor="resin-overhead-percentage">
@@ -514,150 +825,6 @@ const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
           max={1000000}
         />
       </FormFieldRow>
-
-      <div className="pt-4 px-2 sm:px-4 border-t border-border">
-        <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Post Processing</h2>
-          <span className="px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 text-[10px] font-bold border border-blue-500/20">BETA</span>
-        </div>
-
-        <FormFieldRow label="Include Painting" htmlFor="resin-include-painting">
-          <div className="flex items-center h-10">
-            <input
-              id="resin-include-painting"
-              type="checkbox"
-              aria-label="Include Painting"
-              className="w-5 h-5 rounded border-input bg-background"
-              checked={isPaintingEnabled}
-              onChange={(e) => {
-                setIsPaintingEnabled(e.target.checked);
-                if (e.target.checked) {
-                  updateField("paintingLayers", "1");
-                  updateField("paintingTime", "0.5");
-                } else {
-                  updateField("paintingLayers", "");
-                  updateField("paintingTime", "");
-                  updateField("selectedPaintId", "");
-                }
-              }}
-            />
-            <span className="ml-2 text-sm text-foreground">Enable</span>
-          </div>
-        </FormFieldRow>
-
-        {isPaintingEnabled && (
-          <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-            <FormFieldRow label="Surface Area (cm²)">
-              <div className="flex gap-2 items-center">
-                <TextField
-                  type="number"
-                  value={formData.surfaceAreaCm2}
-                  onChange={(v) => updateField("surfaceAreaCm2", v)}
-                  placeholder="Enter area manually"
-                  className="flex-1"
-                  min={0}
-                  max={1000000}
-                  endAdornment={
-                    <SurfaceAreaUpload
-                      className="border-none hover:bg-transparent px-2"
-                      onSurfaceAreaDetected={(area) => updateField("surfaceAreaCm2", (area / 100).toString())}
-                    />
-                  }
-                />
-              </div>
-            </FormFieldRow>
-
-            <FormFieldRow label="Choose paint">
-              <SelectField
-                value={formData.selectedPaintId || "none"}
-                onChange={(v) => updateField("selectedPaintId", v === "none" ? "" : v)}
-                placeholder="Select paint..."
-                options={[
-                  { id: "none", label: "-- None --" },
-                  ...(Array.isArray(constants) ? constants : [])
-                    .filter(c => c && typeof c.name === 'string' && c.is_visible !== false)
-                    .map(c => {
-                      let usageRate = "";
-                      const usageMatch = c.description?.match(/Usage Rate:\s*([\d.]+)/i);
-                      if (usageMatch) {
-                        usageRate = ` @ ${usageMatch[1]}ml/cm²`;
-                      }
-
-                      return {
-                        id: c.id,
-                        label: c.name,
-                        sublabel: currency ? `${c.value} ${c.unit ? `(${c.unit.replace('$', currency.symbol)})` : ''}${usageRate}` : `${c.value}`
-                      };
-                    })]}
-              />
-            </FormFieldRow>
-
-            <FormFieldRow label="Coating Layers">
-              <TextField
-                type="number"
-                step="1"
-                value={formData.paintingLayers}
-                onChange={(v) => updateField("paintingLayers", v)}
-                placeholder="1"
-                min={0}
-                max={100}
-              />
-            </FormFieldRow>
-
-
-
-            <FormFieldRow label="Secondary Paint">
-              <SelectField
-                value={formData.selectedPaintId2 || "none"}
-                onChange={(v) => updateField("selectedPaintId2", v === "none" ? "" : v)}
-                placeholder="Select second paint..."
-                options={[
-                  { id: "none", label: "-- None --" },
-                  ...(Array.isArray(constants) ? constants : [])
-                    .filter(c => c && typeof c.name === 'string' && c.is_visible !== false)
-                    .map(c => {
-                      let usageRate = "";
-                      const usageMatch = c.description?.match(/Usage Rate:\s*([\d.]+)/i);
-                      if (usageMatch) {
-                        usageRate = ` @ ${usageMatch[1]}ml/cm²`;
-                      }
-
-                      return {
-                        id: c.id,
-                        label: c.name,
-                        sublabel: currency ? `${c.value} ${c.unit ? `(${c.unit.replace('$', currency.symbol)})` : ''}${usageRate}` : `${c.value}`
-                      };
-                    })
-                ]}
-              />
-            </FormFieldRow>
-
-            <FormFieldRow label="2nd Coating Layers">
-              <TextField
-                type="number"
-                step="1"
-                value={formData.paintingLayers2}
-                onChange={(v) => updateField("paintingLayers2", v)}
-                placeholder="1"
-                min={0}
-                max={100}
-              />
-            </FormFieldRow>
-
-            <FormFieldRow label="Painting Labor (hrs)">
-              <TextField
-                type="number"
-                step="0.1"
-                value={formData.paintingTime}
-                onChange={(v) => updateField("paintingTime", v)}
-                placeholder="0.5"
-                min={0}
-                max={1000}
-              />
-            </FormFieldRow>
-          </div>
-        )}
-      </div>
 
     </QuoteCalculator >
   );

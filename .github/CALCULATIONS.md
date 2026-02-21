@@ -13,7 +13,7 @@ All quotes calculate these fields:
 
 ```
 subtotalBeforeOverhead = materialCost + machineTimeCost + electricityCost 
-                        + laborCost + consumablesTotal + paintingCost
+                        + laborCost + laborConsumablesCost + laborMachineCost + consumablesTotal
 
 overheadCost = subtotalBeforeOverhead * (overheadPercentage / 100)
 subtotal = subtotalBeforeOverhead + overheadCost
@@ -25,18 +25,47 @@ totalPrice = unitPrice * quantity
 ### FDM-Specific Inputs
 - **printTime** (hours) → machineTimeCost
 - **filamentWeight** (grams) → converted to kg → materialCost
-- **laborHours** (hours) → laborCost
-- **material.cost_per_unit** ($/kg) → used in materialCost
-- **machine.hourly_cost** ($/hr) → used in machineTimeCost
+- **toolBreakdown[] material mapping** → primary source for materialCost in multicolor jobs
+- **material.cost_per_unit** ($/kg) → used per mapped filament material (fallback to selected material when needed)
+- **machine.hourly_cost** ($/hr) → used in machineTimeCost (computed from machine price, usage, lifetime, maintenance)
 - **machine.power_consumption_watts** → electricityCost = printTime × (watts/1000) × electricityRate
+- **recyclableTotals/support/tower/flush** (from parser) → tracked in quote parameters for reporting (non-cost)
+
+In mapped multicolor flow:
+
+```
+materialCost = Σ (toolBreakdown[i].totalGrams / 1000) * mappedMaterial[i].cost_per_unit
+```
+
+If no per-tool mapping exists, calculation falls back to single-material logic.
 
 ### Resin-Specific Inputs
 - **printTime** (hours)
 - **resinVolume** (ml) → materialCost using material.cost_per_unit ($/ml)
-- **washingTime** (hours) → laborCost
-- **curingTime** (hours) → laborCost
 - **isopropylCost** (flat value)
 - **machine.power_consumption_watts** → electricityCost
+
+## Labor Model
+
+Labor uses global labor items with a pricing model plus optional per-unit consumables/equipment.
+
+```
+laborSelections = [
+  { laborItemId, units, consumables: [{ constantId, quantity }], machines: [{ machineId, hours }] }
+]
+
+laborCost = sum(laborItem.rate * units)
+laborConsumablesCost = sum(consumable.quantity * constant.value)
+laborMachineCost = sum(machine.hours * machine.hourly_cost)
+```
+
+The quote parameters include a list of all labor usage entries:
+
+```
+laborItemsUsed = [{ id, name, type, pricingModel, rate, units, cost }]
+laborConsumablesUsed = [{ constantId, name, quantity, unitCost, cost }]
+laborMachinesUsed = [{ machineId, name, hours, rate, cost }]
+```
 
 ## Quantity Multiplier Logic
 
@@ -55,34 +84,7 @@ This allows showing "Price per unit: $50" and "Total for 3 units: $150".
 
 ## Painting/Post-Processing Costs
 
-Located in FDM calculation (lines 78-120):
-
-### Paint Material Calculation
-Supports two paint types with complex logic:
-
-```typescript
-if (paintConsumable.unit === '$/ml') {
-  // Calculated paint: $ per ml consumed
-  // Extract "Usage Rate: 0.02ml/cm²" from description
-  paintingMaterialCost = paintConsumable.value × 
-                        surfaceAreaCm2 × 
-                        paintingLayers × 
-                        usageRate
-} else {
-  // Flat rate paint
-  paintingMaterialCost = paintConsumable.value
-}
-```
-
-### Paint Labor
-```typescript
-paintingLaborCost = paintingTime × laborRate
-```
-
-**Total Painting Cost:**
-```
-paintingCost = paintingLaborCost + paintingMaterialCost1 + paintingMaterialCost2
-```
+Painting is modeled as a labor item. Add a global labor item (pricing + type) and attach any consumables/equipment per unit.
 
 ## Consumables Model
 
@@ -117,7 +119,7 @@ batchTotals = {
    ```typescript
    const powerConsumptionKw = machine.power_consumption_watts ? machine.power_consumption_watts / 1000 : 0;
    ```
-4. **Paint rate extraction:** The usage rate is in the description field—parsing can fail silently. Default to 0.02ml/cm² if not found.
+4. **Labor units validation:** Each labor selection must include a labor item and units > 0.
 
 ## Testing Calculation Accuracy
 
@@ -128,7 +130,8 @@ batchTotals = {
 - Machine: Prusa i3 @ $5/hr, 360W
 - Print Time: 10 hours
 - Filament: 200g
-- Labor: 0.5 hours @ $15/hr
+- Labor: 0.5 hours @ $15/hr (hourly labor item)
+- Labor consumables: $1.20 (gloves + cleanup)
 - Electricity Rate: $0.12/kWh
 - Overhead: 10%
 - Markup: 25%
@@ -139,17 +142,18 @@ materialCost = 0.2 * 20 = $4
 machineTimeCost = 10 * 5 = $50
 electricityCost = 10 * 0.36 * 0.12 = $0.43
 laborCost = 0.5 * 15 = $7.50
-subtotalBeforeOverhead = $61.93
-overheadCost = $6.19
-subtotal = $68.12
-markup = $17.03
-unitPrice = $85.15
+laborConsumablesCost = $1.20
+subtotalBeforeOverhead = $63.13
+overheadCost = $6.31
+subtotal = $69.44
+markup = $17.36
+unitPrice = $86.80
 ```
 
 ### Validation Checklist
 - [ ] Quantity multiplier correctly applied to total, not unitPrice
 - [ ] Overhead percentage calculated on correct subtotal (before markup)
-- [ ] Paint consumable unit conversion ($/ml vs flat rate)
+- [ ] Labor consumables/equipment rates use the latest constants/machine hourly cost
 - [ ] Null-safe access to optional machine fields
 - [ ] Filament weight division by 1000 (g → kg)
 - [ ] Print time unit conversion (ensure hours, not seconds)

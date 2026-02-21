@@ -276,7 +276,7 @@ const ConstantsManager = () => {
                   autoComplete="off"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Electricity Rate, Labor Rate"
+                  placeholder="e.g., Electricity Rate, Overhead Rate"
                   required
                 />
               </div>

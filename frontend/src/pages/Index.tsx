@@ -19,6 +19,7 @@ import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { QuoteData } from "@/types/quote";
 import { useSavedQuotes } from "@/hooks/useSavedQuotes";
 import { useBatchQuote } from "@/hooks/useBatchQuote";
+import { useCurrency } from "@/hooks/useCurrency";
 import WhatsNewDialog from "@/components/feedback/WhatsNewDialog";
 import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 import { LicenseUpdateAnnouncement } from "@/components/feedback/LicenseUpdateAnnouncement";
@@ -29,6 +30,7 @@ const QuotesDashboard = lazy(() => import("@/components/dashboard/QuotesDashboar
 
 const Index = memo(() => {
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
+  const { formatPrice } = useCurrency();
 
 
   const [resetKey, setResetKey] = useState(0);
@@ -127,23 +129,28 @@ const Index = memo(() => {
           <div className="space-y-6 animate-fade-in">
             <Card className="shadow-elevated border-border bg-card overflow-hidden hover-glow">
               <Tabs defaultValue="fdm" className="w-full">
-                <div className="border-b border-border px-3 sm:px-6 pt-4 sm:pt-6 pb-4">
+                <div className="border-b border-border px-3 sm:px-6 pt-4 sm:pt-6 pb-4 flex items-center justify-between gap-3">
                   <TabsList className="bg-secondary/50 p-1 sm:p-1.5 rounded-xl w-full sm:w-auto">
                     <TabsTrigger
                       value="fdm"
                       className="data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-card rounded-lg px-3 sm:px-6 py-2 sm:py-2.5 transition-all duration-200 text-xs sm:text-sm flex-1 sm:flex-none"
                     >
                       <Printer className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      FDM Printing
+                      FDM
                     </TabsTrigger>
                     <TabsTrigger
                       value="resin"
                       className="data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-card rounded-lg px-3 sm:px-6 py-2 sm:py-2.5 transition-all duration-200 text-xs sm:text-sm flex-1 sm:flex-none"
                     >
                       <Printer className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      Resin Printing
+                      Resin
                     </TabsTrigger>
                   </TabsList>
+                  {quoteData && (
+                    <div className="hidden sm:flex items-center rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                      Profit:&nbsp;<span className="font-semibold text-foreground">{formatPrice(quoteData.markup)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <TabsContent value="fdm" className="p-3 sm:p-6 mt-0 animate-fade-in">

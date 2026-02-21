@@ -55,6 +55,8 @@ Material Cost: ${formatPrice(batchTotals.totalMaterialCost)}
 Machine Time: ${formatPrice(batchTotals.totalMachineTimeCost)}
 Electricity: ${formatPrice(batchTotals.totalElectricityCost)}
 Labor: ${formatPrice(batchTotals.totalLaborCost)}
+Labor Consumables: ${formatPrice(batchTotals.totalLaborConsumablesCost)}
+Labor Equipment: ${formatPrice(batchTotals.totalLaborMachineCost)}
 Overhead: ${formatPrice(batchTotals.totalOverheadCost)}
 Markup: ${formatPrice(batchTotals.totalMarkup)}
 ==========================================
@@ -147,9 +149,25 @@ GRAND TOTAL: ${formatPrice(batchTotals.grandTotal)}
                     <div className="flex justify-between text-muted-foreground">
                         <span>Labor + Overhead</span>
                         <span className="font-medium text-foreground">
-                            {formatPrice(batchTotals.totalLaborCost + batchTotals.totalOverheadCost)}
+                            {formatPrice(batchTotals.totalLaborCost + batchTotals.totalLaborConsumablesCost + batchTotals.totalLaborMachineCost + batchTotals.totalOverheadCost)}
                         </span>
                     </div>
+                    {(batchTotals.totalLaborConsumablesCost > 0 || batchTotals.totalLaborMachineCost > 0) && (
+                        <div className="space-y-1 text-xs text-muted-foreground">
+                            {batchTotals.totalLaborConsumablesCost > 0 && (
+                                <div className="flex justify-between">
+                                    <span>Labor Consumables</span>
+                                    <span>{formatPrice(batchTotals.totalLaborConsumablesCost)}</span>
+                                </div>
+                            )}
+                            {batchTotals.totalLaborMachineCost > 0 && (
+                                <div className="flex justify-between">
+                                    <span>Labor Equipment</span>
+                                    <span>{formatPrice(batchTotals.totalLaborMachineCost)}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <Separator className="my-2" />
                     <div className="flex justify-between items-center">
                         <span className="font-semibold">Grand Total</span>

@@ -34,6 +34,7 @@ import { Package, Plus, Trash2, MapPin, AlertTriangle, Pencil } from "lucide-rea
 import { toast } from "sonner";
 import { MaterialSpool, Material } from "@/types/quote";
 import { getSpools, saveSpool, deleteSpool } from "@/lib/core/sessionStorage";
+import { HexColorSwatch } from "@/components/shared/HexColorSwatch";
 
 interface MaterialInventoryProps {
     material: Material;
@@ -232,10 +233,7 @@ export function MaterialInventory({ material, onStockChanged }: MaterialInventor
                             const percentage = (spool.currentWeight / spool.initialWeight) * 100;
                             return (
                                 <Card key={spool.id} className="p-3 flex items-center gap-3 group">
-                                    <div
-                                        className="w-6 h-6 rounded-full border-2 border-border shrink-0"
-                                        style={{ backgroundColor: spool.color }}
-                                    />
+                                    <HexColorSwatch color={spool.color} size="lg" />
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <p className="text-sm font-medium truncate">{spool.name}</p>
@@ -299,14 +297,17 @@ export function MaterialInventory({ material, onStockChanged }: MaterialInventor
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor={`spool-color-${material.id}`}>Color</Label>
-                                <input
-                                    id={`spool-color-${material.id}`}
-                                    name="color"
-                                    type="color"
-                                    value={formData.color}
-                                    onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                                    className="w-full h-10 rounded-md border border-input cursor-pointer"
-                                />
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        id={`spool-color-${material.id}`}
+                                        name="color"
+                                        type="color"
+                                        value={formData.color}
+                                        onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                                        className="w-full h-10 rounded-md border border-input cursor-pointer"
+                                    />
+                                    <HexColorSwatch color={formData.color} size="lg" showHexLabel />
+                                </div>
                             </div>
                         </div>
 

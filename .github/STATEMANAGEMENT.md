@@ -46,6 +46,8 @@ interface BatchQuoteContextType {
     totalMachineTimeCost: number;
     totalElectricityCost: number;
     totalLaborCost: number;
+    totalLaborConsumablesCost: number;
+    totalLaborMachineCost: number;
     totalOverheadCost: number;
     totalMarkup: number;
     grandTotal: number;
@@ -162,6 +164,14 @@ export const useSavedQuotes = () => {
 - Auto-syncs with localStorage on change
 - Returns typed interface for safe access
 
+**Current derived stats include:**
+- `totalQuotes`
+- `totalValue`
+- `averageQuote`
+- `fdmCount`
+- `resinCount`
+- `totalProfit` (sum of quote `markup` across saved quotes)
+
 ## SessionStorage Module
 
 **File:** [src/lib/core/sessionStorage.ts](../src/lib/core/sessionStorage.ts)  
@@ -174,8 +184,11 @@ APP::MATERIALS           → Material[]
 APP::MACHINES            → Machine[]
 APP::CUSTOMERS           → Customer[]
 APP::EMPLOYEES           → Employee[]
+APP::LABOR_ITEMS         → LaborItem[]
 APP::SPOOLS              → MaterialSpool[]
 APP::GCODES              → GcodeData[]
+APP::FDM_CALC_DRAFT      → { formData, selectedSpoolId }
+APP::RESIN_CALC_DRAFT    → { formData, selectedSpoolId }
 APP::CONSTANTS           → CostConstant[]
 APP::JOBS                → Job[]
 APP::CURRENCY            → string

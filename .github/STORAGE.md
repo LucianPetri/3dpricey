@@ -20,11 +20,12 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
   machineTimeCost: number;
   electricityCost: number;
   laborCost: number;
+  laborConsumablesCost?: number;
+  laborMachineCost?: number;
   overheadCost: number;
   subtotal: number;
   markup: number;
   totalPrice: number;
-  paintingCost?: number;
   unitPrice: number;
   quantity: number;
   printType: "FDM" | "Resin";
@@ -40,6 +41,7 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
   assignedMachineId?: string;
   priority?: 'Low' | 'Medium' | 'High';
   dueDate?: string;          // ISO date
+  assignedEmployeeId?: string;
 }
 ```
 
@@ -76,6 +78,10 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
   id: string;
   name: string;
   hourly_cost: number;              // $/hr
+  machine_price?: number;           // Purchase price
+  hours_per_day_usage?: number;     // Hours per day
+  lifetime_years?: number;          // Expected life in years
+  maintenance_percentage?: number;  // % used in hourly cost formula
   power_consumption_watts: number | null;
   print_type: "FDM" | "Resin";
 }
@@ -121,11 +127,33 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
   email?: string;
   phone?: string;
   createdAt: string;
+  allowedLaborItemIds?: string[];
 }
 ```
 
 **Persistence:** Settings → Employees tab.  
 **Usage:** Print jobs assignedEmployeeId reference.
+
+### LABOR_ITEMS
+**Key:** `APP::LABOR_ITEMS`  
+**Type:** `LaborItem[]`  
+**Size:** ~300 bytes per labor item
+
+```typescript
+{
+  id: string;
+  name: string;
+  type: string;
+  pricingModel: "hourly" | "flat";
+  rate: number;
+  description?: string;
+  consumables: { id: string; constantId: string; quantityPerUnit: number }[];
+  machines: { id: string; machineId: string; hoursPerUnit: number }[];
+}
+```
+
+**Persistence:** Settings → Labor tab.  
+**Usage:** Calculators build `laborSelections` and compute labor + consumable + equipment totals.
 
 ### SPOOLS
 **Key:** `APP::SPOOLS`  
@@ -152,26 +180,74 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
 
 ### GCODES
 **Key:** `APP::GCODES`  
-**Type:** `GcodeData[]`  
+**Type:** `StoredGcode[]`  
 **Size:** ~1KB per file (with thumbnail base64)
 
 ```typescript
 {
-  printTimeHours: number;
-  filamentWeightGrams: number;
-  filamentLengthMm?: number;
-  printerModel?: string;
-  filamentColour?: string;
-  filamentSettingsId?: string;
-  thumbnail?: string;           // base64 data URL
-  fileName?: string;
-  filePath?: string;            // User's system path
-  surfaceAreaMm2?: number;
+  id: string;
+  name: string;
+  filePath: string;
+  printTime: number;
+  filamentWeight: number;
+  resinVolume?: number;
+  machineName?: string;
+  materialName?: string;
+  printType?: "FDM" | "Resin";
+  thumbnail?: string;
+  colorUsages?: { tool: string; color?: string; material?: string; materialId?: string; spoolId?: string; usedGrams: number }[];
+  toolBreakdown?: {
+    tool: string;
+    color?: string;
+    material?: string;
+    materialId?: string;
+    spoolId?: string;
+    modelGrams: number;
+    supportGrams: number;
+    towerGrams: number;
+    flushGrams: number;
+    totalGrams: number;
+  }[];
+  recyclableColorUsages?: { tool: string; color?: string; supportGrams: number; towerGrams: number; flushGrams: number; recyclableGrams: number }[];
+  recyclableTotals?: { supportGrams: number; towerGrams: number; flushGrams: number; recyclableGrams: number; modelGrams?: number };
+  createdAt: string;
 }
 ```
 
 **Persistence:** GcodeManager component allows viewing uploaded .gcodes.  
 **Usage:** Preview previously parsed files without re-parsing.
+
+### Recyclable Color Aggregation Output
+
+`getRecyclableColorTotals()` now returns per-color recyclable totals plus inventory context:
+
+```typescript
+byColor: {
+  color: string;
+  supportGrams: number;
+  towerGrams: number;
+  flushGrams: number;
+  recyclableGrams: number;
+  stockGrams: number;   // current FDM spool stock for that color
+  surplusGrams: number; // stockGrams - recyclableGrams
+}[]
+```
+
+This allows Settings UI to prioritize **how much of each color is available** alongside recyclable totals.
+
+### CALCULATOR DRAFTS
+**Keys:** `APP::FDM_CALC_DRAFT`, `APP::RESIN_CALC_DRAFT`  
+**Type:** `{ formData: FDMFormData | ResinFormData, selectedSpoolId?: string }`
+
+```typescript
+{
+  formData: FDMFormData | ResinFormData;
+  selectedSpoolId?: string;
+}
+```
+
+**Persistence:** Auto-saved as users edit calculators.  
+**Usage:** Restores in-progress quotes when navigating away; cleared via Reset Quote. FDM drafts include per-tool material/spool mappings in `formData.toolBreakdown`.
 
 ### CONSTANTS
 **Key:** `APP::CONSTANTS`  

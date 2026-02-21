@@ -124,6 +124,7 @@ export const useSavedQuotes = (): UseSavedQuotesReturn => {
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const totalRevenue = quotes.reduce((sum, q) => sum + q.totalPrice, 0);
+    const totalProfit = quotes.reduce((sum, q) => sum + (q.markup || 0), 0);
     const recentQuotes = quotes.filter(q =>
       q.createdAt && new Date(q.createdAt) >= weekAgo
     ).length;
@@ -131,6 +132,7 @@ export const useSavedQuotes = (): UseSavedQuotesReturn => {
     return {
       totalQuotes: quotes.length,
       totalRevenue,
+      totalProfit,
       avgQuoteValue: quotes.length > 0 ? totalRevenue / quotes.length : 0,
       fdmCount: quotes.filter(q => q.printType === "FDM").length,
       resinCount: quotes.filter(q => q.printType === "Resin").length,

@@ -8,11 +8,62 @@
 // Local Storage - Data persists until explicitly cleared
 // Data remains even after app closes/restarts
 
-import { QuoteData, Material, Machine, CostConstant, Customer, CustomerReview, MaterialSpool, CompanySettings, QuoteStatus, Employee, StoredGcode } from "@/types/quote";
+import { QuoteData, Material, Machine, CostConstant, Customer, CustomerReview, MaterialSpool, CompanySettings, QuoteStatus, Employee, StoredGcode, LaborItem } from "@/types/quote";
 
 // Generate unique IDs
 const generateId = (): string => {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+};
+
+const DEFAULT_MACHINE_HOURS_PER_DAY = 8;
+const DEFAULT_MACHINE_LIFETIME_YEARS = 3;
+const DEFAULT_MACHINE_MAINTENANCE_PERCENTAGE = 0;
+
+export const calculateHourlyCostFromInputs = (
+    machinePrice: number,
+    hoursPerDayUsage: number,
+    lifetimeYears: number,
+    maintenancePercentage: number
+): number => {
+    if (machinePrice <= 0 || hoursPerDayUsage <= 0 || lifetimeYears <= 0) return 0;
+    const baseCost = machinePrice / (lifetimeYears * 365 * hoursPerDayUsage);
+    const maintenanceCost = machinePrice * (maintenancePercentage / 100);
+    return baseCost + maintenanceCost;
+};
+
+const calculateMachinePriceFromHourlyCost = (
+    hourlyCost: number,
+    hoursPerDayUsage: number,
+    lifetimeYears: number,
+    maintenancePercentage: number
+): number => {
+    const divisor = (1 / (lifetimeYears * 365 * hoursPerDayUsage)) + (maintenancePercentage / 100);
+    if (hourlyCost <= 0 || divisor <= 0) return 0;
+    return hourlyCost / divisor;
+};
+
+const normalizeMachine = (machine: Machine): Machine => {
+    const hoursPerDayUsage = machine.hours_per_day_usage ?? DEFAULT_MACHINE_HOURS_PER_DAY;
+    const lifetimeYears = machine.lifetime_years ?? DEFAULT_MACHINE_LIFETIME_YEARS;
+    const maintenancePercentage = machine.maintenance_percentage ?? DEFAULT_MACHINE_MAINTENANCE_PERCENTAGE;
+    const machinePrice = machine.machine_price && machine.machine_price > 0
+        ? machine.machine_price
+        : calculateMachinePriceFromHourlyCost(machine.hourly_cost, hoursPerDayUsage, lifetimeYears, maintenancePercentage);
+    const calculatedHourlyCost = calculateHourlyCostFromInputs(
+        machinePrice,
+        hoursPerDayUsage,
+        lifetimeYears,
+        maintenancePercentage
+    );
+
+    return {
+        ...machine,
+        machine_price: machinePrice,
+        hours_per_day_usage: hoursPerDayUsage,
+        lifetime_years: lifetimeYears,
+        maintenance_percentage: maintenancePercentage,
+        hourly_cost: calculatedHourlyCost > 0 ? parseFloat(calculatedHourlyCost.toFixed(2)) : machine.hourly_cost,
+    };
 };
 
 // Default Materials
@@ -43,37 +94,36 @@ const defaultMaterials: Material[] = [
 // Default Machines
 const defaultMachines: Machine[] = [
     // FDM Printers
-    { id: "fdm-ender3", name: "Ender 3", hourly_cost: 2, power_consumption_watts: 350, print_type: "FDM" },
-    { id: "fdm-ender3-v2", name: "Ender 3 V2", hourly_cost: 2.5, power_consumption_watts: 350, print_type: "FDM" },
-    { id: "fdm-ender3-v3", name: "Ender 3 V3", hourly_cost: 3, power_consumption_watts: 300, print_type: "FDM" },
-    { id: "fdm-creality-k1", name: "Creality K1", hourly_cost: 6, power_consumption_watts: 350, print_type: "FDM" },
-    { id: "fdm-creality-k1-max", name: "Creality K1 Max", hourly_cost: 8, power_consumption_watts: 500, print_type: "FDM" },
-    { id: "fdm-prusa-mk3", name: "Prusa i3 MK3S+", hourly_cost: 5, power_consumption_watts: 120, print_type: "FDM" },
-    { id: "fdm-prusa-mk4", name: "Prusa MK4", hourly_cost: 6, power_consumption_watts: 150, print_type: "FDM" },
-    { id: "fdm-bambu-a1-mini", name: "Bambu Lab A1 Mini", hourly_cost: 5, power_consumption_watts: 150, print_type: "FDM" },
-    { id: "fdm-bambu-a1", name: "Bambu Lab A1", hourly_cost: 6, power_consumption_watts: 200, print_type: "FDM" },
-    { id: "fdm-bambu-p1s", name: "Bambu Lab P1S", hourly_cost: 8, power_consumption_watts: 350, print_type: "FDM" },
-    { id: "fdm-bambu-x1c", name: "Bambu Lab X1 Carbon", hourly_cost: 10, power_consumption_watts: 400, print_type: "FDM" },
-    { id: "fdm-voron-24", name: "Voron 2.4", hourly_cost: 7, power_consumption_watts: 400, print_type: "FDM" },
-    { id: "fdm-artillery-x3", name: "Artillery Sidewinder X3", hourly_cost: 4, power_consumption_watts: 450, print_type: "FDM" },
-    { id: "fdm-qidi-x-max3", name: "QIDI X-Max 3", hourly_cost: 7, power_consumption_watts: 500, print_type: "FDM" },
+    normalizeMachine({ id: "fdm-ender3", name: "Ender 3", hourly_cost: 2, power_consumption_watts: 350, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-ender3-v2", name: "Ender 3 V2", hourly_cost: 2.5, power_consumption_watts: 350, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-ender3-v3", name: "Ender 3 V3", hourly_cost: 3, power_consumption_watts: 300, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-creality-k1", name: "Creality K1", hourly_cost: 6, power_consumption_watts: 350, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-creality-k1-max", name: "Creality K1 Max", hourly_cost: 8, power_consumption_watts: 500, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-prusa-mk3", name: "Prusa i3 MK3S+", hourly_cost: 5, power_consumption_watts: 120, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-prusa-mk4", name: "Prusa MK4", hourly_cost: 6, power_consumption_watts: 150, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-bambu-a1-mini", name: "Bambu Lab A1 Mini", hourly_cost: 5, power_consumption_watts: 150, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-bambu-a1", name: "Bambu Lab A1", hourly_cost: 6, power_consumption_watts: 200, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-bambu-p1s", name: "Bambu Lab P1S", hourly_cost: 8, power_consumption_watts: 350, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-bambu-x1c", name: "Bambu Lab X1 Carbon", hourly_cost: 10, power_consumption_watts: 400, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-voron-24", name: "Voron 2.4", hourly_cost: 7, power_consumption_watts: 400, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-artillery-x3", name: "Artillery Sidewinder X3", hourly_cost: 4, power_consumption_watts: 450, print_type: "FDM" }),
+    normalizeMachine({ id: "fdm-qidi-x-max3", name: "QIDI X-Max 3", hourly_cost: 7, power_consumption_watts: 500, print_type: "FDM" }),
     // Resin Printers
-    { id: "resin-elegoo-mars3", name: "Elegoo Mars 3", hourly_cost: 3, power_consumption_watts: 45, print_type: "Resin" },
-    { id: "resin-elegoo-mars4", name: "Elegoo Mars 4 Ultra", hourly_cost: 4, power_consumption_watts: 48, print_type: "Resin" },
-    { id: "resin-elegoo-saturn3", name: "Elegoo Saturn 3", hourly_cost: 5, power_consumption_watts: 60, print_type: "Resin" },
-    { id: "resin-elegoo-saturn4", name: "Elegoo Saturn 4 Ultra", hourly_cost: 6, power_consumption_watts: 65, print_type: "Resin" },
-    { id: "resin-anycubic", name: "Anycubic Photon Mono", hourly_cost: 4, power_consumption_watts: 50, print_type: "Resin" },
-    { id: "resin-anycubic-m5s", name: "Anycubic Photon Mono M5s", hourly_cost: 5, power_consumption_watts: 55, print_type: "Resin" },
-    { id: "resin-halot-mage", name: "Creality Halot Mage", hourly_cost: 4, power_consumption_watts: 50, print_type: "Resin" },
-    { id: "resin-halot-ray", name: "Creality Halot Ray", hourly_cost: 3, power_consumption_watts: 45, print_type: "Resin" },
-    { id: "resin-phrozen-mini8k", name: "Phrozen Sonic Mini 8K", hourly_cost: 5, power_consumption_watts: 50, print_type: "Resin" },
-    { id: "resin-phrozen-mega8k", name: "Phrozen Mega 8K", hourly_cost: 7, power_consumption_watts: 80, print_type: "Resin" },
+    normalizeMachine({ id: "resin-elegoo-mars3", name: "Elegoo Mars 3", hourly_cost: 3, power_consumption_watts: 45, print_type: "Resin" }),
+    normalizeMachine({ id: "resin-elegoo-mars4", name: "Elegoo Mars 4 Ultra", hourly_cost: 4, power_consumption_watts: 48, print_type: "Resin" }),
+    normalizeMachine({ id: "resin-elegoo-saturn3", name: "Elegoo Saturn 3", hourly_cost: 5, power_consumption_watts: 60, print_type: "Resin" }),
+    normalizeMachine({ id: "resin-elegoo-saturn4", name: "Elegoo Saturn 4 Ultra", hourly_cost: 6, power_consumption_watts: 65, print_type: "Resin" }),
+    normalizeMachine({ id: "resin-anycubic", name: "Anycubic Photon Mono", hourly_cost: 4, power_consumption_watts: 50, print_type: "Resin" }),
+    normalizeMachine({ id: "resin-anycubic-m5s", name: "Anycubic Photon Mono M5s", hourly_cost: 5, power_consumption_watts: 55, print_type: "Resin" }),
+    normalizeMachine({ id: "resin-halot-mage", name: "Creality Halot Mage", hourly_cost: 4, power_consumption_watts: 50, print_type: "Resin" }),
+    normalizeMachine({ id: "resin-halot-ray", name: "Creality Halot Ray", hourly_cost: 3, power_consumption_watts: 45, print_type: "Resin" }),
+    normalizeMachine({ id: "resin-phrozen-mini8k", name: "Phrozen Sonic Mini 8K", hourly_cost: 5, power_consumption_watts: 50, print_type: "Resin" }),
+    normalizeMachine({ id: "resin-phrozen-mega8k", name: "Phrozen Mega 8K", hourly_cost: 7, power_consumption_watts: 80, print_type: "Resin" }),
 ];
 
 // Default Constants/Consumables
 const defaultConstants: CostConstant[] = [
     { id: "electricity", name: "Electricity Rate", value: 0.12, unit: "$/kWh", is_visible: false, description: "Cost per kilowatt-hour" },
-    { id: "labor", name: "Labor Rate", value: 15, unit: "$/hr", is_visible: false, description: "Hourly labor cost" },
     { id: "overhead", name: "Overhead Rate", value: 10, unit: "%", is_visible: false, description: "Overhead percentage" },
     { id: "markup", name: "Default Markup", value: 30, unit: "%", is_visible: false, description: "Default profit margin" },
     // Paint Consumables
@@ -81,6 +131,59 @@ const defaultConstants: CostConstant[] = [
     { id: "paint-spray-primer", name: "Spray Primer", value: 0.08, unit: "$/ml", is_visible: true, description: "Base coat primer. Usage Rate: 0.03ml/cm2" },
     { id: "paint-clear-coat", name: "Clear Coat Varnish", value: 0.12, unit: "$/ml", is_visible: true, description: "Protective finish. Usage Rate: 0.02ml/cm2" },
     { id: "paint-enamel", name: "Enamel Paint", value: 0.15, unit: "$/ml", is_visible: true, description: "Durable detail work. Usage Rate: 0.02ml/cm2" },
+];
+
+const defaultLaborItems: LaborItem[] = [
+    {
+        id: "labor-bed-cleaning",
+        name: "Bed Cleaning",
+        type: "Post-processing",
+        pricingModel: "hourly",
+        rate: 15,
+        description: "Clean and prepare the print surface",
+        consumables: [],
+        machines: [],
+    },
+    {
+        id: "labor-support-removal",
+        name: "Support Removal",
+        type: "Post-processing",
+        pricingModel: "hourly",
+        rate: 18,
+        description: "Remove supports and clean up part",
+        consumables: [],
+        machines: [],
+    },
+    {
+        id: "labor-polishing",
+        name: "Polishing",
+        type: "Finishing",
+        pricingModel: "hourly",
+        rate: 20,
+        description: "Sanding/polishing surfaces",
+        consumables: [],
+        machines: [],
+    },
+    {
+        id: "labor-painting",
+        name: "Painting",
+        type: "Finishing",
+        pricingModel: "hourly",
+        rate: 22,
+        description: "Surface prep and painting",
+        consumables: [],
+        machines: [],
+    },
+    {
+        id: "labor-packaging",
+        name: "Packaging",
+        type: "Fulfillment",
+        pricingModel: "flat",
+        rate: 2,
+        description: "Boxing and packaging materials",
+        consumables: [],
+        machines: [],
+    },
 ];
 
 // Session Storage Keys
@@ -94,7 +197,10 @@ const STORAGE_KEYS = {
     SPOOLS: "session_spools",
     COMPANY: "session_company",
     EMPLOYEES: "session_employees",
+    LABOR_ITEMS: "session_labor_items",
     GCODES: "session_gcodes",
+    FDM_CALC_DRAFT: "session_fdm_calc_draft",
+    RESIN_CALC_DRAFT: "session_resin_calc_draft",
     INITIALIZED: "session_initialized",
 };
 
@@ -105,6 +211,7 @@ const initializeDefaults = () => {
         localStorage.setItem(STORAGE_KEYS.MATERIALS, JSON.stringify(defaultMaterials));
         localStorage.setItem(STORAGE_KEYS.MACHINES, JSON.stringify(defaultMachines));
         localStorage.setItem(STORAGE_KEYS.CONSTANTS, JSON.stringify(defaultConstants));
+        localStorage.setItem(STORAGE_KEYS.LABOR_ITEMS, JSON.stringify(defaultLaborItems));
         localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify([]));
         localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify([]));
         localStorage.setItem(STORAGE_KEYS.SPOOLS, JSON.stringify([]));
@@ -114,7 +221,7 @@ const initializeDefaults = () => {
     }
 
     // Migration: Add default paint consumables if they don't exist
-    const existingConstants: CostConstant[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONSTANTS) || "[]");
+    let existingConstants: CostConstant[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONSTANTS) || "[]");
     const paintConsumables = defaultConstants.filter(c => c.id.startsWith("paint-"));
     let needsUpdate = false;
 
@@ -137,9 +244,15 @@ const initializeDefaults = () => {
         }
     }
 
+    const filteredConstants = existingConstants.filter(c => c.id !== "labor" && c.name !== "Labor Rate");
+    if (filteredConstants.length !== existingConstants.length) {
+        existingConstants = filteredConstants;
+        needsUpdate = true;
+    }
+
     // Migration: Ensure system constants are hidden (not visible in paint/consumable selection)
-    const systemIds = ["electricity", "labor", "overhead", "markup"];
-    const systemNames = ["Electricity Rate", "Labor Rate", "Overhead Rate", "Default Markup"];
+    const systemIds = ["electricity", "overhead", "markup"];
+    const systemNames = ["Electricity Rate", "Overhead Rate", "Default Markup"];
 
     for (let i = 0; i < existingConstants.length; i++) {
         const c = existingConstants[i];
@@ -151,6 +264,10 @@ const initializeDefaults = () => {
 
     if (needsUpdate) {
         localStorage.setItem(STORAGE_KEYS.CONSTANTS, JSON.stringify(existingConstants));
+    }
+
+    if (!localStorage.getItem(STORAGE_KEYS.LABOR_ITEMS)) {
+        localStorage.setItem(STORAGE_KEYS.LABOR_ITEMS, JSON.stringify(defaultLaborItems));
     }
 };
 
@@ -248,32 +365,70 @@ export const deleteMaterial = (id: string): void => {
 export const getMachines = (printType?: "FDM" | "Resin"): Machine[] => {
     initializeDefaults();
     const machines: Machine[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.MACHINES) || "[]");
-    return printType ? machines.filter(m => m.print_type === printType) : machines;
+    const normalized = machines.map(normalizeMachine);
+    return printType ? normalized.filter(m => m.print_type === printType) : normalized;
 };
 
 export const saveMachine = (machine: Omit<Machine, "id"> & { id?: string }): Machine => {
     const machines = getMachines();
+    const normalized = normalizeMachine(machine as Machine);
     if (machine.id) {
         // Update existing
         const index = machines.findIndex(m => m.id === machine.id);
         if (index !== -1) {
-            machines[index] = machine as Machine;
+            machines[index] = { ...normalized, id: machine.id } as Machine;
         }
     } else {
         // Add new
         const newMachine: Machine = {
-            ...machine,
+            ...normalized,
             id: generateId(),
         } as Machine;
         machines.push(newMachine);
     }
     localStorage.setItem(STORAGE_KEYS.MACHINES, JSON.stringify(machines));
-    return machine as Machine;
+    return normalized as Machine;
 };
 
 export const deleteMachine = (id: string): void => {
     const machines = getMachines().filter(m => m.id !== id);
     localStorage.setItem(STORAGE_KEYS.MACHINES, JSON.stringify(machines));
+};
+
+// Calculator Drafts
+export type CalculatorDraft<T> = {
+    formData: T;
+    selectedSpoolId?: string;
+};
+
+export const getFdmCalculatorDraft = <T>(): CalculatorDraft<T> | null => {
+    initializeDefaults();
+    const raw = localStorage.getItem(STORAGE_KEYS.FDM_CALC_DRAFT);
+    return raw ? (JSON.parse(raw) as CalculatorDraft<T>) : null;
+};
+
+export const saveFdmCalculatorDraft = <T>(draft: CalculatorDraft<T>): void => {
+    initializeDefaults();
+    localStorage.setItem(STORAGE_KEYS.FDM_CALC_DRAFT, JSON.stringify(draft));
+};
+
+export const clearFdmCalculatorDraft = (): void => {
+    localStorage.removeItem(STORAGE_KEYS.FDM_CALC_DRAFT);
+};
+
+export const getResinCalculatorDraft = <T>(): CalculatorDraft<T> | null => {
+    initializeDefaults();
+    const raw = localStorage.getItem(STORAGE_KEYS.RESIN_CALC_DRAFT);
+    return raw ? (JSON.parse(raw) as CalculatorDraft<T>) : null;
+};
+
+export const saveResinCalculatorDraft = <T>(draft: CalculatorDraft<T>): void => {
+    initializeDefaults();
+    localStorage.setItem(STORAGE_KEYS.RESIN_CALC_DRAFT, JSON.stringify(draft));
+};
+
+export const clearResinCalculatorDraft = (): void => {
+    localStorage.removeItem(STORAGE_KEYS.RESIN_CALC_DRAFT);
 };
 
 // Constants
@@ -282,8 +437,8 @@ export const getConstants = (): CostConstant[] => {
     const constants = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONSTANTS) || "[]");
 
     // Enforce system constants to be hidden
-    const systemIds = ["electricity", "labor", "overhead", "markup"];
-    const systemNames = ["Electricity Rate", "Labor Rate", "Overhead Rate", "Default Markup"];
+    const systemIds = ["electricity", "overhead", "markup"];
+    const systemNames = ["Electricity Rate", "Overhead Rate", "Default Markup"];
 
     return constants.map((c: CostConstant) => {
         if (systemIds.includes(c.id) || systemNames.includes(c.name)) {
@@ -395,7 +550,24 @@ export const getCustomerStats = (customerId: string) => {
 
 export const getEmployees = (): Employee[] => {
     initializeDefaults();
-    return JSON.parse(localStorage.getItem(STORAGE_KEYS.EMPLOYEES) || "[]");
+    const employees: Employee[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.EMPLOYEES) || "[]");
+    const laborItemIds = getLaborItems().map(item => item.id);
+    let needsUpdate = false;
+    const normalized = employees.map(employee => {
+        const allowedLaborItemIds = Array.isArray(employee.allowedLaborItemIds)
+            ? employee.allowedLaborItemIds
+            : laborItemIds;
+        if (employee.allowedLaborItemIds !== allowedLaborItemIds) {
+            needsUpdate = true;
+        }
+        return { ...employee, allowedLaborItemIds };
+    });
+
+    if (needsUpdate) {
+        localStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(normalized));
+    }
+
+    return normalized;
 };
 
 export const saveEmployee = (employee: Omit<Employee, "id" | "createdAt"> & { id?: string }): Employee => {
@@ -408,10 +580,12 @@ export const saveEmployee = (employee: Omit<Employee, "id" | "createdAt"> & { id
         }
     } else {
         // Add new
+        const laborItemIds = getLaborItems().map(item => item.id);
         const newEmployee: Employee = {
             ...employee,
             id: generateId(),
             createdAt: new Date().toISOString(),
+            allowedLaborItemIds: employee.allowedLaborItemIds || laborItemIds,
         };
         employees.unshift(newEmployee);
     }
@@ -428,6 +602,38 @@ export const deleteEmployee = (id: string): void => {
 
 export const getEmployee = (id: string): Employee | undefined => {
     return getEmployees().find(e => e.id === id);
+};
+
+// ==================== LABOR ITEMS ====================
+
+export const getLaborItems = (): LaborItem[] => {
+    initializeDefaults();
+    return JSON.parse(localStorage.getItem(STORAGE_KEYS.LABOR_ITEMS) || "[]");
+};
+
+export const saveLaborItem = (laborItem: Omit<LaborItem, "id"> & { id?: string }): LaborItem => {
+    const laborItems = getLaborItems();
+    if (laborItem.id) {
+        const index = laborItems.findIndex(item => item.id === laborItem.id);
+        if (index !== -1) {
+            laborItems[index] = { ...laborItems[index], ...laborItem } as LaborItem;
+        }
+    } else {
+        const newItem: LaborItem = {
+            ...laborItem,
+            id: generateId(),
+        } as LaborItem;
+        laborItems.unshift(newItem);
+    }
+    localStorage.setItem(STORAGE_KEYS.LABOR_ITEMS, JSON.stringify(laborItems));
+    return laborItem.id
+        ? laborItems.find(item => item.id === laborItem.id)!
+        : laborItems[0];
+};
+
+export const deleteLaborItem = (id: string): void => {
+    const laborItems = getLaborItems().filter(item => item.id !== id);
+    localStorage.setItem(STORAGE_KEYS.LABOR_ITEMS, JSON.stringify(laborItems));
 };
 
 // ==================== CUSTOMER REVIEWS ====================
@@ -602,6 +808,70 @@ export const deleteGcode = (id: string): void => {
     localStorage.setItem(STORAGE_KEYS.GCODES, JSON.stringify(gcodes));
 };
 
+export const getRecyclableColorTotals = (): {
+    byColor: { color: string; supportGrams: number; towerGrams: number; flushGrams: number; recyclableGrams: number; stockGrams: number; surplusGrams: number }[];
+    totals: { supportGrams: number; towerGrams: number; flushGrams: number; recyclableGrams: number };
+} => {
+    const gcodes = getGcodes();
+    const totalsByColor = new Map<string, { supportGrams: number; towerGrams: number; flushGrams: number; recyclableGrams: number }>();
+    const normalizeColorKey = (value: string) => value.trim().toUpperCase();
+
+    for (const gcode of gcodes) {
+        if (!gcode.recyclableColorUsages) continue;
+        for (const usage of gcode.recyclableColorUsages) {
+            const color = usage.color || usage.tool || "Unknown";
+            const key = normalizeColorKey(color);
+            const current = totalsByColor.get(key) || { supportGrams: 0, towerGrams: 0, flushGrams: 0, recyclableGrams: 0 };
+            current.supportGrams += usage.supportGrams || 0;
+            current.towerGrams += usage.towerGrams || 0;
+            current.flushGrams += usage.flushGrams || 0;
+            current.recyclableGrams += usage.recyclableGrams || 0;
+            totalsByColor.set(key, current);
+        }
+    }
+
+    const materials = getMaterials();
+    const materialById = new Map(materials.map(item => [item.id, item]));
+    const stockByColor = new Map<string, number>();
+
+    for (const spool of getSpools()) {
+        const material = materialById.get(spool.materialId);
+        if (!material || material.print_type !== "FDM") continue;
+        const color = (spool.color || "Unknown").trim();
+        const key = normalizeColorKey(color);
+        stockByColor.set(key, (stockByColor.get(key) || 0) + (spool.currentWeight || 0));
+    }
+
+    const byColor = Array.from(totalsByColor.entries())
+        .map(([color, values]) => ({
+            color,
+            supportGrams: Math.round(values.supportGrams * 100) / 100,
+            towerGrams: Math.round(values.towerGrams * 100) / 100,
+            flushGrams: Math.round(values.flushGrams * 100) / 100,
+            recyclableGrams: Math.round(values.recyclableGrams * 100) / 100,
+            stockGrams: Math.round((stockByColor.get(color) || 0) * 100) / 100,
+            surplusGrams: Math.round(((stockByColor.get(color) || 0) - values.recyclableGrams) * 100) / 100,
+        }))
+        .sort((a, b) => b.recyclableGrams - a.recyclableGrams);
+
+    const totals = byColor.reduce((acc, row) => ({
+        supportGrams: acc.supportGrams + row.supportGrams,
+        towerGrams: acc.towerGrams + row.towerGrams,
+        flushGrams: acc.flushGrams + row.flushGrams,
+        recyclableGrams: acc.recyclableGrams + row.recyclableGrams,
+    }), { supportGrams: 0, towerGrams: 0, flushGrams: 0, recyclableGrams: 0 });
+
+    return {
+        byColor,
+        totals: {
+            supportGrams: Math.round(totals.supportGrams * 100) / 100,
+            towerGrams: Math.round(totals.towerGrams * 100) / 100,
+            flushGrams: Math.round(totals.flushGrams * 100) / 100,
+            recyclableGrams: Math.round(totals.recyclableGrams * 100) / 100,
+        },
+    };
+};
+
 // ==================== COMPANY SETTINGS ====================
 
 
@@ -624,6 +894,7 @@ export interface SettingsExport {
     materials: Material[];
     machines: Machine[];
     constants: CostConstant[];
+    laborItems?: LaborItem[];
     customers: Customer[];
     reviews?: CustomerReview[];
     spools?: MaterialSpool[];
@@ -639,6 +910,7 @@ export const exportAllSettings = (): SettingsExport => {
         materials: getMaterials(),
         machines: getMachines(),
         constants: getConstants(),
+        laborItems: getLaborItems(),
         customers: getCustomers(),
         reviews: getReviews(),
         spools: getSpools(),
@@ -660,6 +932,10 @@ export const importAllSettings = (data: SettingsExport): { success: boolean; mes
             return { success: false, message: "Settings data is corrupted" };
         }
 
+        if (data.laborItems && !Array.isArray(data.laborItems)) {
+            return { success: false, message: "Labor items data is corrupted" };
+        }
+
         // Validate customers (optional for backward compatibility)
         if (data.customers && !Array.isArray(data.customers)) {
             return { success: false, message: "Customer data is corrupted" };
@@ -673,6 +949,10 @@ export const importAllSettings = (data: SettingsExport): { success: boolean; mes
 
         // Import constants
         localStorage.setItem(STORAGE_KEYS.CONSTANTS, JSON.stringify(data.constants));
+
+        if (data.laborItems) {
+            localStorage.setItem(STORAGE_KEYS.LABOR_ITEMS, JSON.stringify(data.laborItems));
+        }
 
         // Import customers (if present)
         if (data.customers) {
@@ -701,7 +981,7 @@ export const importAllSettings = (data: SettingsExport): { success: boolean; mes
 
         return {
             success: true,
-            message: `Imported ${data.materials.length} materials, ${data.machines.length} machines, ${data.constants.length} consumables${data.customers ? `, ${data.customers.length} customers` : ''}${data.reviews ? `, ${data.reviews.length} reviews` : ''}${data.spools ? `, ${data.spools.length} spools` : ''}${data.gcodes ? `, ${data.gcodes.length} G-codes` : ''}`
+            message: `Imported ${data.materials.length} materials, ${data.machines.length} machines, ${data.constants.length} consumables${data.laborItems ? `, ${data.laborItems.length} labor items` : ''}${data.customers ? `, ${data.customers.length} customers` : ''}${data.reviews ? `, ${data.reviews.length} reviews` : ''}${data.spools ? `, ${data.spools.length} spools` : ''}${data.gcodes ? `, ${data.gcodes.length} G-codes` : ''}`
         };
     } catch (error) {
         console.error("Import error:", error);

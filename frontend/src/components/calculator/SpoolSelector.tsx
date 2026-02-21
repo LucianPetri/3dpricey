@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertTriangle, Package, XCircle } from "lucide-react";
 import { getSpools, getMaterialStock } from "@/lib/core/sessionStorage";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { HexColorSwatch } from "@/components/shared/HexColorSwatch";
 
 interface SpoolSelectorProps {
     materialId: string;
@@ -101,10 +102,7 @@ export function SpoolSelector({
                         {selectedSpool && (
                             <div className="flex items-center gap-2">
                                 {selectedSpool.color && (
-                                    <div
-                                        className="w-4 h-4 rounded-full border border-border shrink-0"
-                                        style={{ backgroundColor: selectedSpool.color }}
-                                    />
+                                    <HexColorSwatch color={selectedSpool.color} size="md" />
                                 )}
                                 <span>{selectedSpool.name || 'Unnamed'}</span>
                                 <span className="text-muted-foreground">
@@ -128,10 +126,7 @@ export function SpoolSelector({
                             >
                                 <div className="flex items-center gap-2 w-full">
                                     {spool.color && (
-                                        <div
-                                            className="w-4 h-4 rounded-full border border-border shrink-0"
-                                            style={{ backgroundColor: spool.color }}
-                                        />
+                                        <HexColorSwatch color={spool.color} size="md" />
                                     )}
                                     <span className={`truncate ${!canFulfill ? "line-through opacity-60" : ""}`}>
                                         {spool.name || 'Unnamed'}

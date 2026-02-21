@@ -21,6 +21,8 @@ export interface BatchQuoteContextType {
         totalMachineTimeCost: number;
         totalElectricityCost: number;
         totalLaborCost: number;
+        totalLaborConsumablesCost: number;
+        totalLaborMachineCost: number;
         totalOverheadCost: number;
         totalMarkup: number;
         grandTotal: number;
