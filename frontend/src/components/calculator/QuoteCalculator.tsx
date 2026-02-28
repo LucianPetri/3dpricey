@@ -33,8 +33,8 @@ export const QuoteCalculator = memo(({ loading, onCalculate, onReset, children, 
     <div className="space-y-6">
       {uploadSection}
 
-      <div className="border border-border rounded-xl overflow-hidden shadow-card">
-        <div className="divide-y divide-border/50">
+      <div className="border border-border rounded-xl shadow-card bg-gradient-to-br from-card/80 to-card/40 p-3 sm:p-4">
+        <div className="flex flex-wrap gap-3 [&>*]:w-full xl:[&>*]:w-[calc(50%-0.375rem)] [&>.calculator-full-span]:xl:!w-full">
           {children}
         </div>
       </div>

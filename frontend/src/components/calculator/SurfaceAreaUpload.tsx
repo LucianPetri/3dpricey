@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Upload, FileBox, Loader2, CheckCircle2 } from "lucide-react";
 // import { parse3mf } from "@/lib/parsers/gcodeParser"; // Lazy loaded
 import { toast } from "sonner";
-import { cn, MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 interface SurfaceAreaUploadProps {
     onSurfaceAreaDetected: (areaMm2: number) => void;
@@ -25,16 +25,6 @@ export const SurfaceAreaUpload = ({ onSurfaceAreaDetected, className }: SurfaceA
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-
-        // Check file size limit (100MB)
-        if (file.size > MAX_FILE_SIZE_BYTES) {
-            toast.error(`File size too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
-            // Reset input
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-            return;
-        }
 
         // Validate extension
         if (!file.name.toLowerCase().endsWith('.3mf')) {

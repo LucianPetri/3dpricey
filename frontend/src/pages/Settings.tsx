@@ -19,7 +19,6 @@ import {
   Recycle,
   Settings2,
   ArrowLeft,
-  Wifi,
   type LucideIcon,
 } from "lucide-react";
 import MaterialsManager from "@/components/settings/MaterialsManager";
@@ -35,8 +34,6 @@ import CompanySettings from "@/components/settings/CompanySettings";
 import GcodeManager from "@/components/settings/GcodeManager";
 import { useSearchParams, Link } from "react-router-dom";
 import { CurrencySelector } from "@/components/shared/CurrencySelector";
-import { PrinterConnectionDialog } from "@/components/printer/PrinterConnectionDialog";
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 type SettingsTab =
@@ -127,9 +124,6 @@ const settingsSections: SettingsSection[] = [
 const sectionGroups: SettingsSection["group"][] = ["Print Setup", "Business", "Workspace"];
 
 const Settings = () => {
-  const [showPrinterDialog, setShowPrinterDialog] = useState(false);
-
-  const [connectedPrinter, setConnectedPrinter] = useState<{ name?: string; dev_name?: string } | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const tabFromUrl = searchParams.get("tab");
@@ -169,19 +163,17 @@ const Settings = () => {
     }
   };
 
-  useEffect(() => {
-    // Optional: Check if already connected on mount
-    if ('electronAPI' in window) {
-      // We could add an API to get current connection status if needed
-    }
-  }, []);
+
   return (
     <div className="min-h-screen bg-background flex">
       <div className="fixed inset-0 bg-gradient-glow pointer-events-none" />
 
       <aside className="w-72 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-900 border-r border-emerald-900/30 flex flex-col h-screen sticky top-0 shadow-2xl z-40">
         <div className="p-6 border-b border-emerald-900/30 bg-gradient-to-r from-emerald-950/40 to-cyan-950/40">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Settings</h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">Settings</h1>
+            <CurrencySelector />
+          </div>
           <p className="text-xs text-emerald-300/70 mt-1">Configuration Console</p>
         </div>
 
@@ -217,22 +209,6 @@ const Settings = () => {
         </nav>
 
         <div className="border-t border-emerald-900/30 bg-gradient-to-r from-slate-950 to-slate-900 p-4 space-y-3">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-start gap-2 border-emerald-900/40 text-slate-200 hover:text-emerald-300 hover:bg-slate-800/50"
-            onClick={() => setShowPrinterDialog(true)}
-          >
-            <Wifi className="w-4 h-4" />
-            <span className="truncate">
-              {connectedPrinter ? `Connected: ${connectedPrinter.name || connectedPrinter.dev_name}` : "Connect Printer"}
-            </span>
-          </Button>
-
-          <div className="w-full">
-            <CurrencySelector />
-          </div>
-
           <Button
             variant="ghost"
             asChild
@@ -284,13 +260,6 @@ const Settings = () => {
           <SettingsExportImport />
         </div>
       </main>
-
-      <PrinterConnectionDialog
-        open={showPrinterDialog}
-        onOpenChange={setShowPrinterDialog}
-        onConnected={setConnectedPrinter}
-      />
-
     </div>
   );
 };

@@ -13,12 +13,6 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Global constant for maximum file upload size (100MB)
- */
-export const MAX_FILE_SIZE_MB = 100;
-export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-
-/**
  * Global constant for maximum logo image upload size (5MB)
  */
 export const MAX_LOGO_SIZE_MB = 5;

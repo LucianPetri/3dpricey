@@ -18,12 +18,13 @@ interface FormFieldProps {
   highlight?: boolean;
   hint?: string;
   htmlFor?: string;
+  className?: string;
   children: React.ReactNode;
 }
 
-export const FormFieldRow = memo(({ label, required, highlight, hint, htmlFor, children }: FormFieldProps) => (
-  <div className={`grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-1 sm:gap-4 py-3 px-2 sm:px-4 items-start sm:items-center border-b border-border/50 hover:bg-muted/30 transition-colors ${highlight ? 'bg-accent/5' : ''}`}>
-    <div className="font-medium text-sm sm:text-base flex items-center gap-1.5">
+export const FormFieldRow = memo(({ label, required, highlight, hint, htmlFor, className, children }: FormFieldProps) => (
+  <div className={`rounded-lg border border-border/60 bg-card/40 p-3 sm:p-4 transition-colors hover:border-primary/20 hover:bg-card/60 ${highlight ? 'bg-accent/5 border-primary/30' : ''} ${className || ''}`}>
+    <div className="font-medium text-xs sm:text-sm flex items-center gap-1.5 text-muted-foreground mb-2">
       <label htmlFor={htmlFor} className="cursor-pointer">
         {label} {required && <span className="text-destructive">*</span>}
       </label>
@@ -40,7 +41,7 @@ export const FormFieldRow = memo(({ label, required, highlight, hint, htmlFor, c
         </TooltipProvider>
       )}
     </div>
-    <div>{children}</div>
+    <div className="w-full">{children}</div>
   </div>
 ));
 

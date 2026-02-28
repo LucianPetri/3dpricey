@@ -533,7 +533,7 @@ const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
         />
       </FormFieldRow>
 
-      <FormFieldRow label="Consumables" htmlFor="resin-consumables-selector">
+      <FormFieldRow label="Consumables" htmlFor="resin-consumables-selector" className="calculator-full-span">
         <ConsumablesSelector
           id="resin-consumables-selector"
           items={consumableItems}
@@ -630,7 +630,7 @@ const ResinCalculatorTable = memo(({ onCalculate }: ResinCalculatorProps) => {
         />
       </FormFieldRow>
 
-      <FormFieldRow label="Labor Tasks" htmlFor="resin-labor-tasks">
+      <FormFieldRow label="Labor Tasks" htmlFor="resin-labor-tasks" className="calculator-full-span">
         <div className="space-y-3" id="resin-labor-tasks">
           {formData.laborSelections.length === 0 ? (
             <p className="text-xs text-muted-foreground">No labor tasks added.</p>

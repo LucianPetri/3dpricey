@@ -273,7 +273,8 @@ if (thumbFile) {
 
 ## Performance Considerations
 
-- **Large G-Code Files (100MB+):** Regex parsing may be slow. Consider streaming line-by-line parsing.
+- **No frontend upload size cap:** Parser upload components no longer block files at 100MB; any file size may be selected.
+- **Large G-Code Files:** Regex parsing may be slow for very large files. Consider streaming line-by-line parsing.
 - **ZIP Parsing:** JSZip loads entire file into memory. Monitor for memory issues with large 3MF files (>50MB).
 - **Async/Await:** All file operations use async to prevent UI freezing.
 
@@ -296,4 +297,4 @@ if (thumbFile) {
 - [ ] Missing fields return zero (not undefined)
 - [ ] Multiple files in batch upload process
 - [ ] Resin volume in ml
-- [ ] Large files (>100MB) don't freeze UI
+- [ ] Very large files don't freeze UI

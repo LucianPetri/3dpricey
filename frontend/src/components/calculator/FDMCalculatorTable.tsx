@@ -657,7 +657,7 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
         />
       </FormFieldRow>
 
-      <FormFieldRow label="Consumables" htmlFor="fdm-consumables-selector">
+      <FormFieldRow label="Consumables" htmlFor="fdm-consumables-selector" className="calculator-full-span">
         <ConsumablesSelector
           id="fdm-consumables-selector"
           items={consumableItems}
@@ -695,7 +695,7 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
       </FormFieldRow>
 
       {formData.toolBreakdown && formData.toolBreakdown.length > 0 && (
-        <div className="px-2 sm:px-4 py-2 text-xs text-muted-foreground space-y-2">
+        <div className="calculator-full-span px-2 sm:px-4 py-2 text-xs text-muted-foreground space-y-2">
           <p className="font-medium text-foreground/80">Filament Breakdown</p>
           <div className="overflow-auto rounded-md border border-border/60">
             <table className="w-full min-w-[760px] text-xs">
@@ -793,7 +793,7 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
       )}
 
       {formData.recyclableTotals && formData.recyclableTotals.recyclableGrams > 0 && (
-        <div className="px-2 sm:px-4 py-2 text-xs text-muted-foreground space-y-1">
+        <div className="calculator-full-span px-2 sm:px-4 py-2 text-xs text-muted-foreground space-y-1">
           <p className="font-medium text-foreground/80">Recyclable Plastic</p>
           <div className="flex justify-between"><span>Support</span><span>{formData.recyclableTotals.supportGrams.toFixed(2)}g</span></div>
           <div className="flex justify-between"><span>Tower</span><span>{formData.recyclableTotals.towerGrams.toFixed(2)}g</span></div>
@@ -822,7 +822,7 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
         />
       </FormFieldRow>
 
-      <FormFieldRow label="Labor Tasks" htmlFor="fdm-labor-tasks">
+      <FormFieldRow label="Labor Tasks" htmlFor="fdm-labor-tasks" className="calculator-full-span">
         <div className="space-y-3" id="fdm-labor-tasks">
           {formData.laborSelections.length === 0 ? (
             <p className="text-xs text-muted-foreground">No labor tasks added.</p>

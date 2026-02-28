@@ -6,7 +6,7 @@
  */
 
 import { useCurrency } from "@/hooks/useCurrency";
-import { CURRENCIES, Currency } from "@/types/currency";
+import { CURRENCIES } from "@/types/currency";
 import {
     Select,
     SelectContent,
@@ -14,6 +14,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Coins } from "lucide-react";
 
 export const CurrencySelector = () => {
     const { currency, setCurrency } = useCurrency();
@@ -27,22 +28,31 @@ export const CurrencySelector = () => {
 
     return (
         <Select value={currency.code} onValueChange={handleChange}>
-            <SelectTrigger className="w-[100px] h-8 px-2 bg-background hover:bg-muted text-xs sm:text-sm border-input" aria-label="Select Currency">
+            <SelectTrigger
+                className="full-w rounded-lg border bg-popover text-sm font-medium text-foreground hover:bg-accent/50 focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=open]:bg-accent"
+                aria-label="Select Currency"
+            >
                 <SelectValue>
-                    <span className="flex items-center gap-2">
-                        <span className="font-medium">{currency.symbol}</span>
-                        <span>{currency.code}</span>
-                    </span>
+                    <div className="flex flex-col items-start full-w gap-1">
+                        <span className="text-sm font-semibold text-foreground/90">{currency.code}</span>
+                    </div>
                 </SelectValue>
             </SelectTrigger>
-            <SelectContent>
+
+            <SelectContent className="min-w-[240px] rounded-lg bg-popover">
                 {CURRENCIES.map((c) => (
-                    <SelectItem key={c.code} value={c.code}>
-                        <span className="flex items-center gap-2">
-                            <span className="font-medium w-5">{c.symbol}</span>
-                            <span>{c.code}</span>
-                            <span className="text-muted-foreground text-xs">- {c.name}</span>
-                        </span>
+                    <SelectItem
+                        key={c.code}
+                        value={c.code}
+                        className="py-2 cursor-pointer"
+                    >
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                                <span className="text-base font-bold text-foreground">{c.symbol}</span>
+                                <span className="text-sm font-medium text-foreground/90">{c.code}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{c.name}</span>
+                        </div>
                     </SelectItem>
                 ))}
             </SelectContent>

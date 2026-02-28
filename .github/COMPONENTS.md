@@ -65,6 +65,9 @@ const FDMForm = () => {
 - `onSubmit` should calculate quotes and add to batch
 - Calculator forms auto-save drafts to localStorage and expose a Reset Quote button
 - FDM no longer relies on top-level material/color selection; material mapping happens per detected filament row from parsed G-code.
+- Calculator field rows now render as compact card blocks (`FormFieldRow`) to improve density and readability.
+- `QuoteCalculator` now uses a wrapped multi-column field container (`xl` two-column flow) instead of single vertical rows.
+- Complex sections must opt into full-width using `className="calculator-full-span"` (e.g., consumables, labor tasks, large breakdown tables).
 
 ### 2. Upload Components
 
@@ -103,6 +106,7 @@ const GcodeUpload = ({ onParsed }: { onParsed: (data: GcodeData) => void }) => {
 - Parse each file asynchronously
 - Callback with parsed data to parent
 - Display ThumbnailPreview if thumbnail available
+- Do not enforce a hardcoded parser upload size limit in the component
 
 ### 3. Dialog Components
 
@@ -277,12 +281,12 @@ The settings experience uses an **Index-style left sidebar layout** with grouped
 
 - **Left Sidebar (sticky)**
   - Dark gradient shell matching the calculator page visual language
+  - Sidebar title header places the currency selector next to `Settings` above `Configuration Console` with left/right (`space-between`) alignment
   - Grouped navigation sections: `Print Setup`, `Business`, `Workspace`
   - Active item uses emerald/cyan gradient state and border (same style family as Index sidebar)
 
 - **Sidebar Footer Utilities**
-  - Printer connection action with truncation-safe status text
-  - Currency selector and back-to-calculator action
+  - Back-to-calculator action
 
 - **Main Content Workspace**
   - Sticky dark header with section icon, title, group badge, and description

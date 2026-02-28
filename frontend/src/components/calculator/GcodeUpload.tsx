@@ -9,7 +9,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, FileCode, Loader2 } from "lucide-react";
 import { ThumbnailPreview } from "@/components/shared/ThumbnailPreview";
-import { stripFileExtension, MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB } from "@/lib/utils";
+import { stripFileExtension } from "@/lib/utils";
 // import { parseGcode, parse3mf, GcodeData } from "@/lib/parsers/gcodeParser"; // Lazy loaded
 import { GcodeData } from "@/lib/parsers/gcodeParser"; // Type import is fine
 import { toast } from "sonner";
@@ -30,16 +30,6 @@ const GcodeUpload = ({ onDataExtracted }: GcodeUploadProps) => {
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    // Check file size limit (100MB)
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      toast.error(`File size too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
-      // Reset input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      return;
-    }
 
     // Check file extension
     const validExtensions = ['.gcode', '.gco', '.g', '.3mf'];
