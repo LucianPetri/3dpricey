@@ -497,6 +497,15 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
 
   const allSpools = useMemo(() => getSpools(), []);
 
+  const consumedToolBreakdown = useMemo(() => {
+    return (formData.toolBreakdown || []).filter(item => {
+      const totalGrams = typeof item.totalGrams === "number"
+        ? item.totalGrams
+        : (item.modelGrams + item.supportGrams + item.towerGrams + item.flushGrams);
+      return totalGrams > 0;
+    });
+  }, [formData.toolBreakdown]);
+
   const handleToolMaterialChange = useCallback((tool: string, materialId: string) => {
     const selectedMaterial = fdmMaterials.find(item => item.id === materialId);
     setFormData(prev => {
@@ -694,7 +703,7 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
         />
       </FormFieldRow>
 
-      {formData.toolBreakdown && formData.toolBreakdown.length > 0 && (
+      {consumedToolBreakdown.length > 0 && (
         <div className="calculator-full-span px-2 sm:px-4 py-2 text-xs text-muted-foreground space-y-2">
           <p className="font-medium text-foreground/80">Filament Breakdown</p>
           <div className="overflow-auto rounded-md border border-border/60">
@@ -712,7 +721,7 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
                 </tr>
               </thead>
               <tbody>
-                {formData.toolBreakdown.map((item) => (
+                {consumedToolBreakdown.map((item) => (
                   <tr key={item.tool} className="border-t border-border/40">
                     <td className="px-2 py-2 whitespace-nowrap">
                       <div className="inline-flex items-center gap-2">
@@ -771,19 +780,19 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
                 <tr className="border-t border-border/60 bg-muted/20">
                   <td className="px-2 py-2 font-medium" colSpan={3}>Total</td>
                   <td className="px-2 py-2 text-right font-medium">
-                    {formData.toolBreakdown.reduce((sum, item) => sum + item.modelGrams, 0).toFixed(2)}g
+                    {consumedToolBreakdown.reduce((sum, item) => sum + item.modelGrams, 0).toFixed(2)}g
                   </td>
                   <td className="px-2 py-2 text-right font-medium">
-                    {formData.toolBreakdown.reduce((sum, item) => sum + item.supportGrams, 0).toFixed(2)}g
+                    {consumedToolBreakdown.reduce((sum, item) => sum + item.supportGrams, 0).toFixed(2)}g
                   </td>
                   <td className="px-2 py-2 text-right font-medium">
-                    {formData.toolBreakdown.reduce((sum, item) => sum + item.towerGrams, 0).toFixed(2)}g
+                    {consumedToolBreakdown.reduce((sum, item) => sum + item.towerGrams, 0).toFixed(2)}g
                   </td>
                   <td className="px-2 py-2 text-right font-medium">
-                    {formData.toolBreakdown.reduce((sum, item) => sum + item.flushGrams, 0).toFixed(2)}g
+                    {consumedToolBreakdown.reduce((sum, item) => sum + item.flushGrams, 0).toFixed(2)}g
                   </td>
                   <td className="px-2 py-2 text-right font-semibold text-foreground">
-                    {formData.toolBreakdown.reduce((sum, item) => sum + item.totalGrams, 0).toFixed(2)}g
+                    {consumedToolBreakdown.reduce((sum, item) => sum + item.totalGrams, 0).toFixed(2)}g
                   </td>
                 </tr>
               </tbody>

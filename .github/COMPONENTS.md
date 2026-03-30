@@ -348,6 +348,7 @@ The settings experience uses an **Index-style left sidebar layout** with grouped
 **Calculator:** [src/components/calculator/FDMCalculatorTable.tsx](../src/components/calculator/FDMCalculatorTable.tsx)
 
 - Displays one row per detected tool (`T0`, `T1`, ...).
+- Rows with `Total <= 0g` are hidden so only consumed filaments are shown in the breakdown table.
 - Each row shows Creality-style grams columns: `Model`, `Support`, `Tower`, `Flush`, `Total`.
 - Each row includes mapping controls:
   - **Your Spool** (optional): map to owned spool/inventory entry.
