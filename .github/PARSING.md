@@ -1,9 +1,13 @@
 # File Parsing System
 
 ## Overview
-3DPricey auto-extracts print parameters from 3D model files, eliminating manual entry. Three file formats are supported with fallback patterns for different slicer outputs.
+3DPricey auto-extracts fabrication parameters from uploaded design files so the calculators can prefill runtime, dimensions, material area, and stitch counts without forcing manual entry.
 
 **Location:** [src/lib/parsers/](../src/lib/parsers/)
+
+**Phase 2 update:** Multi-material parser output now feeds both the client-side calculator and the authenticated backend `POST /api/quotes/parse-gcode` endpoint. The calculator still performs rich local parsing for uploads, while the backend route returns a normalized composition contract for quote APIs and automated tests.
+
+**Phase 3 update:** Two browser-side parsers were added for the new fabrication modes: [svgParser.ts](../src/lib/parsers/svgParser.ts) for laser design geometry and [embroideryFileParser.ts](../src/lib/parsers/embroideryFileParser.ts) for PES embroidery files. Matching backend parser routes exist at `POST /api/laser/parse-svg` and `POST /api/embroidery/parse-file` for contract coverage.
 
 ## Supported File Formats
 
@@ -14,8 +18,8 @@
 **Extracted Data:**
 - `printTimeHours` – Estimated print duration
 - `filamentWeightGrams` – Material weight
-- `colorUsages[]` – Per-tool filament usage (grams) for multicolor prints
-- `toolBreakdown[]` – Per-tool full breakdown: model/support/tower/flush/total + mapped material info
+- `colorUsages[]` – Per-tool filament usage (grams) for multicolor prints, including stable `order`
+- `toolBreakdown[]` – Per-tool full breakdown: order/tool/model/support/tower/flush/total + mapped material info
 - `recyclableColorUsages[]` – Per-tool recyclable breakdown (support/tower/flush)
 - `recyclableTotals` – Aggregated support/tower/flush/model grams
 - `filamentLengthMm` – Optional filament length in mm
@@ -80,6 +84,38 @@ Offset  Size     Field
 printTimeHours = printTimeSeconds / 3600
 resinVolumeMl = read float from PrintParameters[20]
 ```
+
+### 4. SVG (.svg)
+**Parser:** [svgParser.ts](../src/lib/parsers/svgParser.ts)  
+**Usage:** Laser calculator
+
+**Extracted Data:**
+- `widthMm`
+- `heightMm`
+- `pathCount`
+- `materialSurfaceArea` (cm2)
+- `estimatedCutTime`
+- `estimatedEngravingTime`
+
+**Strategy:**
+- Parse `<svg>` using `DOMParser`
+- Prefer `width` / `height` attributes and fall back to `viewBox`
+- Count vector elements (`path`, `rect`, `circle`, `ellipse`, `polygon`, `polyline`, `line`) to estimate cut complexity
+
+### 5. PES (.pes)
+**Parser:** [embroideryFileParser.ts](../src/lib/parsers/embroideryFileParser.ts)  
+**Usage:** Embroidery calculator
+
+**Extracted Data:**
+- `designWidth`
+- `designHeight`
+- `stitchCount`
+- `estimatedEmbroideryTime`
+
+**Strategy:**
+- Validate PES signature from the first three bytes
+- Read width/height from byte offsets `48` and `50`
+- Derive stitch count from the remaining byte-pair payload when richer stitch maps are not available
 
 ## Parse Robustness Patterns
 
@@ -208,8 +244,35 @@ if (gcodeData.printTimeHours) {
 }
 // Optional multicolor/recyclable data is also copied into form state
 setColorUsages(gcodeData.colorUsages || []);
+setQuoteFilaments(buildQuoteFilamentsFromToolBreakdown(gcodeData.toolBreakdown || []));
 setRecyclableTotals(gcodeData.recyclableTotals);
 ```
+
+### Backend Parse Contract
+
+**Route:** `POST /api/quotes/parse-gcode`
+
+Request body:
+
+```json
+{ "gcode": "...raw gcode..." }
+```
+
+Response fields:
+
+```json
+{
+  "colorChanges": [
+    { "order": 1, "tool": "T0", "color": "#111111", "material": "PLA", "weightGrams": 150 }
+  ],
+  "toolBreakdown": [
+    { "order": 1, "tool": "T0", "modelGrams": 150, "supportGrams": 0, "towerGrams": 0, "flushGrams": 0, "totalGrams": 150 }
+  ],
+  "recyclableTotals": { "supportGrams": 0, "towerGrams": 0, "flushGrams": 0, "recyclableGrams": 0, "modelGrams": 150 }
+}
+```
+
+The backend response is intentionally normalized for contract stability. The browser upload parser remains richer because it also handles thumbnails, file-path metadata, and 3MF extraction.
 
 ## Thumbnail Extraction
 

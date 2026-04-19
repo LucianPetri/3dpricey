@@ -31,7 +31,17 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- Documentation impact identified and mapped to the required .github guide updates.
+- Offline-first behavior reviewed: localStorage, sync, and migration implications are
+  explicit for every affected data flow.
+- Frontend/backend ownership is explicit, with API or schema contract changes called out
+  when a feature crosses the stack boundary.
+- Quote calculation, parser, or stock and inventory changes identify domain invariants
+  and regression risks.
+- Validation plan includes the exact lint, build, test, and manual checks required for
+  the touched packages and workflows.
+- Deployment and security impact is documented for changes involving auth, secrets,
+  Docker, infrastructure, or persistent storage.
 
 ## Project Structure
 

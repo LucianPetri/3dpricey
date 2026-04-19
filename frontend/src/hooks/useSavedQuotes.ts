@@ -9,9 +9,43 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { QuoteData, QuoteStats } from "@/types/quote";
 import { toast } from "sonner";
 import * as sessionStore from "@/lib/core/sessionStorage";
+import { syncService } from "@/lib/sync";
 
 // Helper function to deduct inventory when a quote is saved
 const deductInventoryFromQuote = (quote: QuoteData) => {
+  if ((quote.quoteFilaments || []).length > 0) {
+    quote.quoteFilaments?.forEach((segment) => {
+      const totalDeduction = segment.weightGrams * (quote.quantity || 1);
+      if (totalDeduction <= 0) {
+        return;
+      }
+
+      if (segment.spoolId && sessionStore.deductFromSpool(segment.spoolId, totalDeduction)) {
+        return;
+      }
+
+      if (!segment.materialId) {
+        return;
+      }
+
+      const spools = sessionStore.getSpools(segment.materialId);
+      if (spools.length === 0) {
+        return;
+      }
+
+      const normalizedColor = segment.color?.toLowerCase().trim() || '';
+      const targetSpool = (normalizedColor
+        ? spools.find((spool) =>
+            spool.color?.toLowerCase().includes(normalizedColor)
+            || spool.name?.toLowerCase().includes(normalizedColor)
+          )
+        : undefined) || spools.reduce((max, spool) => spool.currentWeight > max.currentWeight ? spool : max, spools[0]);
+
+      sessionStore.deductFromSpool(targetSpool.id, totalDeduction);
+    });
+    return;
+  }
+
   // Only process if we have material and filament weight
   if (!quote.parameters?.materialName || !quote.parameters?.filamentWeight) {
     return;
@@ -43,10 +77,12 @@ const deductInventoryFromQuote = (quote: QuoteData) => {
 
   // Try to find a spool with matching color (case-insensitive)
   const quoteColor = quote.printColour?.toLowerCase().trim() || '';
-  let targetSpool = spools.find(s =>
-    s.color?.toLowerCase().includes(quoteColor) ||
-    s.name?.toLowerCase().includes(quoteColor)
-  );
+  let targetSpool = quoteColor
+    ? spools.find(s =>
+        s.color?.toLowerCase().includes(quoteColor) ||
+        s.name?.toLowerCase().includes(quoteColor)
+      )
+    : undefined;
 
   // If no color match, use the spool with most remaining weight
   if (!targetSpool) {
@@ -61,6 +97,22 @@ const deductInventoryFromQuote = (quote: QuoteData) => {
 
 // Helper function to restore inventory when a quote is deleted
 const restoreInventoryFromQuote = (quote: QuoteData) => {
+  if ((quote.quoteFilaments || []).length > 0) {
+    quote.quoteFilaments?.forEach((segment) => {
+      if (!segment.spoolId) {
+        return;
+      }
+
+      const totalRestoration = segment.weightGrams * (quote.quantity || 1);
+      if (totalRestoration <= 0) {
+        return;
+      }
+
+      sessionStore.restoreToSpool(segment.spoolId, totalRestoration);
+    });
+    return;
+  }
+
   // Only process if we have material and filament weight
   if (!quote.parameters?.materialName || (!quote.parameters?.filamentWeight && !quote.parameters?.resinVolume)) {
     return;
@@ -119,6 +171,12 @@ export const useSavedQuotes = (): UseSavedQuotesReturn => {
     fetchQuotes();
   }, [fetchQuotes]);
 
+  useEffect(() => {
+    return syncService.subscribe(() => {
+      setQuotes(sessionStore.getQuotes());
+    });
+  }, []);
+
   const stats = useMemo((): QuoteStats => {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -136,6 +194,8 @@ export const useSavedQuotes = (): UseSavedQuotesReturn => {
       avgQuoteValue: quotes.length > 0 ? totalRevenue / quotes.length : 0,
       fdmCount: quotes.filter(q => q.printType === "FDM").length,
       resinCount: quotes.filter(q => q.printType === "Resin").length,
+      laserCount: quotes.filter(q => q.printType === "Laser").length,
+      embroideryCount: quotes.filter(q => q.printType === "Embroidery").length,
       recentQuotes,
     };
   }, [quotes]);
@@ -144,11 +204,12 @@ export const useSavedQuotes = (): UseSavedQuotesReturn => {
     try {
       const newQuote = sessionStore.saveQuote(quote);
       setQuotes(prev => [newQuote, ...prev]);
+      syncService.queueQuoteCreate(newQuote);
 
       // Auto-deduct from inventory
       deductInventoryFromQuote(quote);
 
-      toast.success("Quote saved successfully");
+      toast.success(navigator.onLine ? "Quote saved and queued for sync" : "Quote saved offline and queued for sync");
     } catch (err) {
       const error = err as Error;
       toast.error(error.message || "Failed to save quote");
@@ -162,11 +223,12 @@ export const useSavedQuotes = (): UseSavedQuotesReturn => {
       const quoteToDelete = quotes.find(q => q.id === id);
       if (quoteToDelete) {
         restoreInventoryFromQuote(quoteToDelete);
+        syncService.queueQuoteDelete(quoteToDelete, quoteToDelete.lastServerUpdatedAt || quoteToDelete.updatedAt);
       }
 
       sessionStore.deleteQuote(id);
       setQuotes(prev => prev.filter(q => q.id !== id));
-      toast.success("Quote deleted successfully");
+      toast.success("Quote deleted locally");
     } catch (err) {
       const error = err as Error;
       toast.error(error.message || "Failed to delete quote");
@@ -176,17 +238,21 @@ export const useSavedQuotes = (): UseSavedQuotesReturn => {
 
   const updateNotes = useCallback(async (id: string, notes: string) => {
     try {
-      sessionStore.updateQuoteNotes(id, notes);
-      setQuotes(prev =>
-        prev.map(q => q.id === id ? { ...q, notes } : q)
-      );
-      toast.success("Notes updated successfully!");
+      const currentQuote = quotes.find(q => q.id === id);
+      const updatedQuote = sessionStore.updateQuoteNotes(id, notes);
+
+      if (updatedQuote) {
+        setQuotes(prev => prev.map(q => q.id === id ? updatedQuote : q));
+        syncService.queueQuoteUpdate(updatedQuote, currentQuote?.lastServerUpdatedAt || currentQuote?.updatedAt);
+      }
+
+      toast.success("Notes updated locally");
     } catch (err) {
       const error = err as Error;
       toast.error(error.message || "Failed to update notes");
       throw err;
     }
-  }, []);
+  }, [quotes]);
 
   const duplicateQuote = useCallback(async (quote: QuoteData) => {
     const duplicatedQuote: QuoteData = {

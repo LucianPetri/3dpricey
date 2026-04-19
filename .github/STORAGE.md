@@ -2,16 +2,18 @@
 
 ## Overview
 
-All data persists to **browser localStorage** with keys prefixed `APP::`. This enables offline-first workflow with optional cloud sync (`Supabase` ready but not integrated).
+All data persists to **browser localStorage**. The current implementation uses `session_*` keys for calculator data plus dedicated `pending_sync_*` keys for offline queueing and conflict recovery.
+
+**Phase 3 update:** print-type coverage now includes `Laser` and `Embroidery`, and local draft storage now includes dedicated keys for the new calculators plus a `printer_connections` reconnect cache.
 
 **File:** [src/lib/core/sessionStorage.ts](../src/lib/core/sessionStorage.ts)
 
 ## Storage Keys & Schemas
 
 ### QUOTES
-**Key:** `APP::QUOTES`  
+**Key:** `session_quotes`  
 **Type:** `QuoteData[]`  
-**Size:** ~500 bytes per quote
+**Size:** ~500 bytes per quote before parser and sync metadata
 
 ```typescript
 {
@@ -28,27 +30,74 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
   totalPrice: number;
   unitPrice: number;
   quantity: number;
-  printType: "FDM" | "Resin";
+  printType: "FDM" | "Resin" | "Laser" | "Embroidery";
   projectName: string;
   printColour: string;
   parameters: QuoteParameters;
   createdAt?: string;        // ISO date
+  updatedAt?: string;        // ISO date
   notes?: string;
   filePath?: string;         // Path to uploaded .gcode file
   customerId?: string;       // Reference to Customer
   clientName?: string;       // Display name (nullable)
+  quoteFilaments?: QuoteFilamentSegment[];
   status?: QuoteStatus;      // PENDING | PRINTING | DONE...
   assignedMachineId?: string;
   priority?: 'Low' | 'Medium' | 'High';
   dueDate?: string;          // ISO date
   assignedEmployeeId?: string;
+  syncStatus?: QuoteSyncStatus;        // LEGACY_LOCAL | PENDING_SYNC | SYNCED | CONFLICT | SYNC_FAILED
+  pendingSyncAction?: SyncAction;      // create | update | delete
+  lastSyncedAt?: string;
+  lastServerUpdatedAt?: string;
+  syncError?: string;
+  conflictTransactionId?: string;
 }
 ```
 
-**Persistence:** Saved on quote creation/update (not in batch until exported).
+**Persistence:** Saved immediately on quote creation/update. New quotes default to `PENDING_SYNC`; older quotes without sync metadata are normalized to `LEGACY_LOCAL` so rollout does not relabel historical local-only data.
+
+### SYNC QUEUE & CONFLICTS
+
+**Keys:**
+
+- `pending_sync_changes` → Array of queued backend mutations (`create`, `update`, `delete`)
+- `pending_sync_conflicts` → Array of unresolved conflict payloads returned by `POST /api/sync`
+- `pending_sync_last_synced_at` → ISO timestamp of the most recent successful server sync pass
+
+```typescript
+type PendingSyncChange = {
+  id: string;                      // Quote id (reused as stable local/server identifier)
+  type: 'create' | 'update' | 'delete';
+  resource: 'quote' | 'material' | 'machine';
+  data: Record<string, unknown>;   // Serialized quote snapshot
+  timestamp: number;
+  baseVersion?: string | null;     // Last known server updatedAt for conflict detection
+};
+
+type QuoteSyncConflict = {
+  id: string;
+  changeId: string;
+  transactionId: string;
+  resourceType: 'quote' | 'material' | 'machine';
+  resourceId: string;
+  fields: { field: string; localValue: unknown; serverValue: unknown }[];
+  localVersion: Record<string, unknown>;
+  serverVersion: Record<string, unknown>;
+};
+```
+
+**Persistence rules:**
+
+- Queue entries are added whenever `useSavedQuotes()` saves, edits, or deletes a quote locally.
+- `create -> update` collapses into a single queued `create`.
+- `create -> delete` removes the queue entry entirely.
+- Conflict payloads rehydrate quotes locally with `syncStatus = 'CONFLICT'` so the record stays visible until the user resolves it.
+
+**Current runtime note:** older `APP::...` references in early roadmap docs are historical. The current `sessionStorage.ts` implementation is authoritative.
 
 ### MATERIALS
-**Key:** `APP::MATERIALS`  
+**Key:** `session_materials`  
 **Type:** `Material[]`  
 **Size:** ~200 bytes per material
 
@@ -58,7 +107,7 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
   name: string;
   cost_per_unit: number;      // $/kg for FDM, $/ml for Resin
   density_kg_per_m3?: number;
-  print_type: "FDM" | "Resin";
+  print_type: "FDM" | "Resin" | "Laser" | "Embroidery";
   notes?: string;
   totalInStock?: number;      // kg or ml
   lowStockThreshold?: number;
@@ -69,7 +118,7 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
 **Edit:** Settings → Materials Manager → saves directly.
 
 ### MACHINES
-**Key:** `APP::MACHINES`  
+**Key:** `session_machines`  
 **Type:** `Machine[]`  
 **Size:** ~150 bytes per machine
 
@@ -83,7 +132,7 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
   lifetime_years?: number;          // Expected life in years
   maintenance_percentage?: number;  // % used in hourly cost formula
   power_consumption_watts: number | null;
-  print_type: "FDM" | "Resin";
+  print_type: "FDM" | "Resin" | "Laser" | "Embroidery";
 }
 ```
 
@@ -179,7 +228,7 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
 **Usage:** Quote form optionally selects spool to track consumption.
 
 ### GCODES
-**Key:** `APP::GCODES`  
+**Key:** `session_gcodes`  
 **Type:** `StoredGcode[]`  
 **Size:** ~1KB per file (with thumbnail base64)
 
@@ -193,7 +242,48 @@ All data persists to **browser localStorage** with keys prefixed `APP::`. This e
   resinVolume?: number;
   machineName?: string;
   materialName?: string;
-  printType?: "FDM" | "Resin";
+  printType?: "FDM" | "Resin" | "Laser" | "Embroidery";
+
+### CALCULATOR DRAFTS
+
+**Keys:**
+
+- `session_fdm_calc_draft`
+- `session_resin_calc_draft`
+- `session_laser_calc_draft`
+- `session_embroidery_calc_draft`
+
+**Type:**
+
+```typescript
+type CalculatorDraft<T> = {
+  formData: T;
+  selectedSpoolId?: string;
+}
+```
+
+Laser and embroidery drafts preserve parser-populated design metadata (`filePath`, dimensions, time estimates, stitch count, selected consumables) so the calculator can be resumed after refresh.
+
+### PRINTER RECONNECT CACHE
+
+**Key:** `printer_connections`
+
+```typescript
+type PrinterConnectionMap = Record<string, {
+  ip: string;
+  serial: string;
+  accessCode?: string;
+  cloudMode?: boolean;
+  connectionType?: 'lan' | 'cloud';
+  status: string;
+  lastAttemptAt?: string;
+  lastReconnectAt?: string;
+  lastSeenAt?: string;
+  reconnectError?: string;
+}>;
+```
+
+Used by [PrintManagement.tsx](../src/pages/PrintManagement.tsx) to re-establish machine connections on page load.
   thumbnail?: string;
   colorUsages?: { tool: string; color?: string; material?: string; materialId?: string; spoolId?: string; usedGrams: number }[];
   toolBreakdown?: {

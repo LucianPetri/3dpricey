@@ -2,9 +2,8 @@
  * 3DPricey
  * Copyright (C) 2025 Printel
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,26 +17,14 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertTriangle } from 'lucide-react';
-
-interface ConflictField {
-  field: string;
-  localValue: any;
-  serverValue: any;
-  updatedBy?: string;
-}
-
-interface Conflict {
-  id: string;
-  resourceType: 'quote' | 'material' | 'machine';
-  resourceId: string;
-  fields: ConflictField[];
-}
+import { QuoteSyncConflict } from '@/types/quote';
 
 interface ConflictResolutionModalProps {
-  conflicts: Conflict[];
+  conflicts: QuoteSyncConflict[];
   onResolve: (resolutions: Record<string, 'local' | 'server'>) => void;
   onCancel: () => void;
   isOpen: boolean;
+  isResolving?: boolean;
 }
 
 export function ConflictResolutionModal({
@@ -45,21 +32,37 @@ export function ConflictResolutionModal({
   onResolve,
   onCancel,
   isOpen,
+  isResolving = false,
 }: ConflictResolutionModalProps) {
   const [selections, setSelections] = useState<Record<string, 'local' | 'server'>>({});
 
+  useEffect(() => {
+    setSelections({});
+  }, [conflicts]);
+
   const handleResolve = () => {
-    onResolve(selections);
+    const resolvedSelections: Record<string, 'local' | 'server'> = { ...selections };
+
+    conflicts.forEach((conflict) => {
+      conflict.fields.forEach((field) => {
+        const fieldKey = `${conflict.id}:${field.field}`;
+        if (!resolvedSelections[fieldKey]) {
+          resolvedSelections[fieldKey] = 'local';
+        }
+      });
+    });
+
+    onResolve(resolvedSelections);
   };
 
-  const formatValue = (value: any): string => {
+  const formatValue = (value: unknown): string => {
     if (value === null || value === undefined) return '(empty)';
     if (typeof value === 'object') return JSON.stringify(value);
     return String(value);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onCancel}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onCancel(); }}>
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
           <div className="flex items-center gap-2">
@@ -134,8 +137,8 @@ export function ConflictResolutionModal({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={handleResolve}>
-            Apply Selected Changes
+          <Button onClick={handleResolve} disabled={isResolving}>
+            {isResolving ? 'Applying...' : 'Apply Selected Changes'}
           </Button>
         </DialogFooter>
       </DialogContent>

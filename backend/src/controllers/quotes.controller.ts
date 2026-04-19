@@ -4,10 +4,96 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { AppError } from '../middleware/errorHandler.middleware';
+import { prisma } from '../lib/prisma';
+import {
+  buildQuoteCreateInput,
+  buildQuoteUpdateInput,
+  extractQuoteFilamentsFromPayload,
+  getQuoteInclude,
+  replaceQuoteFilaments,
+  syncQuoteTypeData,
+  toClientQuote,
+} from '../services/quote-extension.service';
+import { parseQuoteGcode } from '../services/gcode-parser.service';
 
-const prisma = new PrismaClient();
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function mergeQuotePayload(existingQuote: Record<string, unknown>, updateData: Record<string, unknown>) {
+  const existingParameters = isRecord(existingQuote.parameters) ? existingQuote.parameters : {};
+  const updateParameters = isRecord(updateData.parameters) ? updateData.parameters : {};
+
+  return {
+    ...existingQuote,
+    ...updateData,
+    parameters: {
+      ...existingParameters,
+      ...updateParameters,
+    },
+  };
+}
+
+function handleQuoteControllerError(res: Response, error: unknown, action: 'create' | 'update' | 'batch create') {
+  if (error instanceof AppError) {
+    return res.status(error.statusCode).json({ error: error.message, details: error.details });
+  }
+
+  console.error(`${action} quote error:`, error);
+  return res.status(500).json({ error: `Failed to ${action} quote` });
+}
+
+async function persistQuoteForUser(userId: string, quoteData: Record<string, unknown>) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { companyId: true },
+  });
+
+  if (!user?.companyId) {
+    throw new AppError(400, 'User must belong to a company');
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const createdQuote = await tx.quote.create({
+      data: buildQuoteCreateInput(quoteData, userId, user.companyId!),
+    });
+
+    await replaceQuoteFilaments(tx, createdQuote.id, extractQuoteFilamentsFromPayload(quoteData));
+    await syncQuoteTypeData(tx as Record<string, unknown>, createdQuote.id, quoteData);
+
+    const hydratedQuote = await tx.quote.findUniqueOrThrow({
+      where: { id: createdQuote.id },
+      include: getQuoteInclude(),
+    });
+
+    await tx.auditLog.create({
+      data: {
+        userId,
+        quoteId: hydratedQuote.id,
+        action: 'CREATE',
+        changes: { quote: toClientQuote(hydratedQuote) },
+      },
+    });
+
+    return hydratedQuote;
+  });
+}
+
+export async function createQuoteForPrintType(req: Request, res: Response, printType: 'Laser' | 'Embroidery') {
+  try {
+    const userId = (req as AuthRequest).userId!;
+    const quote = await persistQuoteForUser(userId, {
+      ...(req.body as Record<string, unknown>),
+      printType,
+    });
+
+    res.status(201).json({ quote: toClientQuote(quote), message: 'Quote created successfully' });
+  } catch (error: unknown) {
+    return handleQuoteControllerError(res, error, 'create');
+  }
+}
 
 export async function getQuotes(req: Request, res: Response) {
   try {
@@ -21,11 +107,7 @@ export async function getQuotes(req: Request, res: Response) {
 
     const quotes = await prisma.quote.findMany({
       where,
-      include: {
-        customer: true,
-        quoteFilaments: true,
-        printJob: true,
-      },
+      include: getQuoteInclude(),
       orderBy: { createdAt: 'desc' },
       take: parseInt(limit as string),
       skip: parseInt(offset as string),
@@ -34,7 +116,7 @@ export async function getQuotes(req: Request, res: Response) {
     const total = await prisma.quote.count({ where });
 
     res.json({
-      quotes,
+      quotes: quotes.map(toClientQuote),
       total,
       limit: parseInt(limit as string),
       offset: parseInt(offset as string),
@@ -55,22 +137,14 @@ export async function getQuoteById(req: Request, res: Response) {
         id,
         userId,
       },
-      include: {
-        customer: true,
-        quoteFilaments: true,
-        printJob: {
-          include: {
-            machine: true,
-          },
-        },
-      },
+      include: getQuoteInclude(),
     });
 
     if (!quote) {
       return res.status(404).json({ error: 'Quote not found' });
     }
 
-    res.json({ quote });
+    res.json({ quote: toClientQuote(quote) });
   } catch (error: any) {
     console.error('Get quote by ID error:', error);
     res.status(500).json({ error: 'Failed to fetch quote' });
@@ -80,45 +154,12 @@ export async function getQuoteById(req: Request, res: Response) {
 export async function createQuote(req: Request, res: Response) {
   try {
     const userId = (req as AuthRequest).userId!;
-    const quoteData = req.body;
+    const quoteData = req.body as Record<string, unknown>;
+    const quote = await persistQuoteForUser(userId, quoteData);
 
-    // Get user's companyId
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { companyId: true },
-    });
-
-    if (!user?.companyId) {
-      return res.status(400).json({ error: 'User must belong to a company' });
-    }
-
-    // Create quote
-    const quote = await prisma.quote.create({
-      data: {
-        ...quoteData,
-        userId,
-        companyId: user.companyId,
-      },
-      include: {
-        customer: true,
-        quoteFilaments: true,
-      },
-    });
-
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        quoteId: quote.id,
-        action: 'CREATE',
-        changes: { quote },
-      },
-    });
-
-    res.status(201).json({ quote, message: 'Quote created successfully' });
-  } catch (error: any) {
-    console.error('Create quote error:', error);
-    res.status(500).json({ error: 'Failed to create quote' });
+    res.status(201).json({ quote: toClientQuote(quote), message: 'Quote created successfully' });
+  } catch (error: unknown) {
+    return handleQuoteControllerError(res, error, 'create');
   }
 }
 
@@ -126,44 +167,53 @@ export async function updateQuote(req: Request, res: Response) {
   try {
     const userId = (req as AuthRequest).userId!;
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = req.body as Record<string, unknown>;
 
     // Check if quote exists and belongs to user
     const existingQuote = await prisma.quote.findFirst({
       where: { id, userId },
+      include: getQuoteInclude(),
     });
 
     if (!existingQuote) {
       return res.status(404).json({ error: 'Quote not found' });
     }
 
-    // Update quote
-    const quote = await prisma.quote.update({
-      where: { id },
-      data: updateData,
-      include: {
-        customer: true,
-        quoteFilaments: true,
-      },
-    });
+    const quote = await prisma.$transaction(async (tx) => {
+      await tx.quote.update({
+        where: { id },
+        data: buildQuoteUpdateInput(updateData),
+      });
 
-    // Create audit log
-    await prisma.auditLog.create({
-      data: {
-        userId,
-        quoteId: quote.id,
-        action: 'UPDATE',
-        changes: {
-          before: existingQuote,
-          after: quote,
+      if (Array.isArray(updateData.quoteFilaments) || Array.isArray((updateData.parameters as Record<string, unknown> | undefined)?.quoteFilaments) || Array.isArray((updateData.parameters as Record<string, unknown> | undefined)?.toolBreakdown)) {
+        await replaceQuoteFilaments(tx, id, extractQuoteFilamentsFromPayload(updateData));
+      }
+
+      await syncQuoteTypeData(tx as Record<string, unknown>, id, mergeQuotePayload(existingQuote, updateData));
+
+      const hydratedQuote = await tx.quote.findUniqueOrThrow({
+        where: { id },
+        include: getQuoteInclude(),
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId,
+          quoteId: hydratedQuote.id,
+          action: 'UPDATE',
+          changes: {
+            before: toClientQuote(existingQuote),
+            after: toClientQuote(hydratedQuote),
+          },
         },
-      },
+      });
+
+      return hydratedQuote;
     });
 
-    res.json({ quote, message: 'Quote updated successfully' });
-  } catch (error: any) {
-    console.error('Update quote error:', error);
-    res.status(500).json({ error: 'Failed to update quote' });
+    res.json({ quote: toClientQuote(quote), message: 'Quote updated successfully' });
+  } catch (error: unknown) {
+    return handleQuoteControllerError(res, error, 'update');
   }
 }
 
@@ -211,36 +261,50 @@ export async function batchCreateQuotes(req: Request, res: Response) {
       return res.status(400).json({ error: 'Invalid quotes data' });
     }
 
-    // Get user's companyId
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { companyId: true },
     });
 
     if (!user?.companyId) {
-      return res.status(400).json({ error: 'User must belong to a company' });
+      throw new AppError(400, 'User must belong to a company');
     }
 
-    // Create quotes in a transaction
-    const createdQuotes = await prisma.$transaction(
-      quotesData.map((quoteData) =>
-        prisma.quote.create({
-          data: {
-            ...quoteData,
-            userId,
-            companyId: user.companyId!,
-          },
-        })
-      )
-    );
+    const createdQuotes = await prisma.$transaction(async (tx) => {
+      const quotes = [];
+
+      for (const rawQuote of quotesData as Record<string, unknown>[]) {
+        const createdQuote = await tx.quote.create({
+          data: buildQuoteCreateInput(rawQuote, userId, user.companyId!),
+        });
+
+        await replaceQuoteFilaments(tx, createdQuote.id, extractQuoteFilamentsFromPayload(rawQuote));
+        await syncQuoteTypeData(tx as Record<string, unknown>, createdQuote.id, rawQuote);
+
+        const hydratedQuote = await tx.quote.findUniqueOrThrow({
+          where: { id: createdQuote.id },
+          include: getQuoteInclude(),
+        });
+
+        quotes.push(hydratedQuote);
+      }
+
+      return quotes;
+    });
 
     res.status(201).json({
-      quotes: createdQuotes,
+      quotes: createdQuotes.map(toClientQuote),
       count: createdQuotes.length,
       message: 'Quotes created successfully',
     });
-  } catch (error: any) {
-    console.error('Batch create quotes error:', error);
-    res.status(500).json({ error: 'Failed to create quotes' });
+  } catch (error: unknown) {
+    return handleQuoteControllerError(res, error, 'batch create');
   }
 }
+
+export async function parseQuoteGcodeController(req: Request, res: Response) {
+  const { gcode } = req.body as { gcode: string };
+  const parsed = parseQuoteGcode(gcode);
+  res.json(parsed);
+}
+

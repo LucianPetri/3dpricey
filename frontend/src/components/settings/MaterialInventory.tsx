@@ -71,17 +71,34 @@ export function MaterialInventory({ material, onStockChanged }: MaterialInventor
         return spools.reduce((sum, s) => sum + s.currentWeight, 0);
     }, [spools]);
 
-    const unit = material.print_type === "FDM" ? "g" : "ml";
-    const maxWeight = material.print_type === "FDM" ? 1000 : 1000; // 1kg or 1L
-    const itemName = material.print_type === "FDM" ? "Spool" : "Bottle"; // FDM uses spools, Resin uses bottles
+    const unit = material.print_type === "FDM"
+        ? "g"
+        : material.print_type === "Resin"
+            ? "ml"
+            : material.unit;
+    const maxWeight = material.print_type === "FDM" || material.print_type === "Resin" ? 1000 : 1;
+    const itemName = material.print_type === "FDM"
+        ? "Spool"
+        : material.print_type === "Resin"
+            ? "Bottle"
+            : material.print_type === "Laser"
+                ? "Sheet"
+                : "Pack";
 
     // Format weight: show kg when >= 1000g, otherwise show g
     const formatWeight = (grams: number) => {
-        if (material.print_type !== "FDM") return `${grams.toFixed(0)}ml`;
-        if (grams >= 1000) {
-            return `${(grams / 1000).toFixed(grams % 1000 === 0 ? 0 : 1)}kg`;
+        if (material.print_type === "FDM") {
+            if (grams >= 1000) {
+                return `${(grams / 1000).toFixed(grams % 1000 === 0 ? 0 : 1)}kg`;
+            }
+            return `${grams.toFixed(0)}g`;
         }
-        return `${grams.toFixed(0)}g`;
+
+        if (material.print_type === "Resin") {
+            return grams >= 1000 ? `${(grams / 1000).toFixed(grams % 1000 === 0 ? 0 : 1)}L` : `${grams.toFixed(0)}ml`;
+        }
+
+        return `${grams.toFixed(grams % 1 === 0 ? 0 : 2)} ${material.unit}`;
     };
 
     // Calculate total weight from spoolCount * weightPerSpool

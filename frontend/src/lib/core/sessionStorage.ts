@@ -8,7 +8,7 @@
 // Local Storage - Data persists until explicitly cleared
 // Data remains even after app closes/restarts
 
-import { QuoteData, Material, Machine, CostConstant, Customer, CustomerReview, MaterialSpool, CompanySettings, QuoteStatus, Employee, StoredGcode, LaborItem, StockItem, StockStats } from "@/types/quote";
+import { QuoteData, Material, Machine, CostConstant, Customer, CustomerReview, MaterialSpool, CompanySettings, QuoteStatus, Employee, StoredGcode, LaborItem, StockItem, StockStats, PrintType } from "@/types/quote";
 
 // Generate unique IDs
 const generateId = (): string => {
@@ -89,6 +89,14 @@ const defaultMaterials: Material[] = [
     { id: "resin-8k", name: "8K High-Detail Resin", cost_per_unit: 50, unit: "liter", print_type: "Resin" },
     { id: "resin-castable", name: "Castable Resin", cost_per_unit: 80, unit: "liter", print_type: "Resin" },
     { id: "resin-clear", name: "Clear/Transparent Resin", cost_per_unit: 55, unit: "liter", print_type: "Resin" },
+    // Laser Materials
+    { id: "laser-acrylic-clear-3mm", name: "Acrylic Clear 3mm", cost_per_unit: 0.18, unit: "cm2", print_type: "Laser" },
+    { id: "laser-birch-plywood-3mm", name: "Birch Plywood 3mm", cost_per_unit: 0.11, unit: "cm2", print_type: "Laser" },
+    { id: "laser-leatherette", name: "Leatherette Sheet", cost_per_unit: 0.14, unit: "cm2", print_type: "Laser" },
+    // Embroidery Materials
+    { id: "embroidery-backing-cutaway", name: "Cut-away Backing", cost_per_unit: 0.75, unit: "unit", print_type: "Embroidery" },
+    { id: "embroidery-backing-tearaway", name: "Tear-away Backing", cost_per_unit: 0.55, unit: "unit", print_type: "Embroidery" },
+    { id: "embroidery-water-soluble", name: "Water Soluble Topping", cost_per_unit: 0.95, unit: "unit", print_type: "Embroidery" },
 ];
 
 // Default Machines
@@ -119,6 +127,12 @@ const defaultMachines: Machine[] = [
     normalizeMachine({ id: "resin-halot-ray", name: "Creality Halot Ray", hourly_cost: 3, power_consumption_watts: 45, print_type: "Resin" }),
     normalizeMachine({ id: "resin-phrozen-mini8k", name: "Phrozen Sonic Mini 8K", hourly_cost: 5, power_consumption_watts: 50, print_type: "Resin" }),
     normalizeMachine({ id: "resin-phrozen-mega8k", name: "Phrozen Mega 8K", hourly_cost: 7, power_consumption_watts: 80, print_type: "Resin" }),
+    // Laser Machines
+    normalizeMachine({ id: "laser-glowforge-pro", name: "Glowforge Pro", hourly_cost: 18, power_consumption_watts: 600, print_type: "Laser" }),
+    normalizeMachine({ id: "laser-thunder-nova24", name: "Thunder Nova 24", hourly_cost: 22, power_consumption_watts: 800, print_type: "Laser" }),
+    // Embroidery Machines
+    normalizeMachine({ id: "embroidery-brother-pr1055x", name: "Brother PR1055X", hourly_cost: 14, power_consumption_watts: 150, print_type: "Embroidery" }),
+    normalizeMachine({ id: "embroidery-ricoma-ch1501", name: "Ricoma CH1501", hourly_cost: 16, power_consumption_watts: 180, print_type: "Embroidery" }),
 ];
 
 // Default Constants/Consumables
@@ -202,7 +216,26 @@ const STORAGE_KEYS = {
     STOCK: "session_stock",
     FDM_CALC_DRAFT: "session_fdm_calc_draft",
     RESIN_CALC_DRAFT: "session_resin_calc_draft",
+    LASER_CALC_DRAFT: "session_laser_calc_draft",
+    EMBROIDERY_CALC_DRAFT: "session_embroidery_calc_draft",
     INITIALIZED: "session_initialized",
+};
+
+const mergeDefaultEntries = <T extends { id: string }>(storageKey: string, defaults: T[]) => {
+    const existing: T[] = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    let changed = false;
+    const merged = [...existing];
+
+    defaults.forEach((entry) => {
+        if (!merged.some((item) => item.id === entry.id)) {
+            merged.push(entry);
+            changed = true;
+        }
+    });
+
+    if (changed) {
+        localStorage.setItem(storageKey, JSON.stringify(merged));
+    }
 };
 
 // Initialize session storage with defaults if not already done
@@ -276,21 +309,62 @@ const initializeDefaults = () => {
     if (!localStorage.getItem(STORAGE_KEYS.LABOR_ITEMS)) {
         localStorage.setItem(STORAGE_KEYS.LABOR_ITEMS, JSON.stringify(defaultLaborItems));
     }
+
+    mergeDefaultEntries(STORAGE_KEYS.MATERIALS, defaultMaterials);
+    mergeDefaultEntries(STORAGE_KEYS.MACHINES, defaultMachines);
 };
 
 // Quotes
+const normalizeQuote = (quote: QuoteData): QuoteData => {
+    const createdAt = quote.createdAt || new Date().toISOString();
+    const updatedAt = quote.updatedAt || createdAt;
+    const quoteFilaments = (quote.quoteFilaments || [])
+        .filter(segment => typeof segment.weightGrams === 'number' && segment.weightGrams > 0)
+        .sort((left, right) => left.order - right.order)
+        .map((segment, index) => ({
+            ...segment,
+            order: index + 1,
+        }));
+
+    return {
+        ...quote,
+        parameters: quote.parameters || {},
+        quoteFilaments,
+        createdAt,
+        updatedAt,
+        status: quote.status || 'PENDING',
+        statusTimeline: quote.statusTimeline || { PENDING: createdAt },
+        assignedMachineId: quote.assignedMachineId || undefined,
+        actualPrintTime: quote.actualPrintTime || undefined,
+        syncStatus: quote.syncStatus || 'LEGACY_LOCAL',
+        pendingSyncAction: quote.pendingSyncAction || undefined,
+        lastSyncedAt: quote.lastSyncedAt || undefined,
+        lastServerUpdatedAt: quote.lastServerUpdatedAt || undefined,
+        syncError: quote.syncError || undefined,
+        conflictTransactionId: quote.conflictTransactionId || undefined,
+    };
+};
+
+const persistQuotes = (quotes: QuoteData[]): QuoteData[] => {
+    const normalizedQuotes = quotes.map(normalizeQuote);
+    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(normalizedQuotes));
+    return normalizedQuotes;
+};
+
 export const getQuotes = (): QuoteData[] => {
     initializeDefaults();
     const rawQuotes = JSON.parse(localStorage.getItem(STORAGE_KEYS.QUOTES) || "[]");
 
-    // Migration: Ensure all quotes have a status and proper defaults
-    return rawQuotes.map((q: QuoteData) => ({
-        ...q,
-        status: q.status || 'PENDING',
-        statusTimeline: q.statusTimeline || { PENDING: q.createdAt },
-        assignedMachineId: q.assignedMachineId || undefined,
-        actualPrintTime: q.actualPrintTime || undefined
-    }));
+    return rawQuotes.map((q: QuoteData) => normalizeQuote(q));
+};
+
+export const saveQuotes = (quotes: QuoteData[]): QuoteData[] => {
+    initializeDefaults();
+    return persistQuotes(quotes);
+};
+
+export const getQuoteById = (id: string): QuoteData | undefined => {
+    return getQuotes().find(quote => quote.id === id);
 };
 
 export const saveQuote = (quote: QuoteData): QuoteData => {
@@ -299,45 +373,90 @@ export const saveQuote = (quote: QuoteData): QuoteData => {
         ...quote,
         id: generateId(),
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        syncStatus: 'PENDING_SYNC',
+        pendingSyncAction: 'create',
+        syncError: undefined,
+        conflictTransactionId: undefined,
     };
-    quotes.unshift(newQuote);
-    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(quotes));
-    return newQuote;
+    return persistQuotes([newQuote, ...quotes])[0];
+};
+
+export const upsertQuote = (quote: QuoteData): QuoteData => {
+    const quotes = getQuotes();
+    const normalizedQuote = normalizeQuote(quote);
+    const existingIndex = quotes.findIndex(item => item.id === normalizedQuote.id);
+
+    if (existingIndex === -1) {
+        persistQuotes([normalizedQuote, ...quotes]);
+        return normalizedQuote;
+    }
+
+    quotes[existingIndex] = normalizedQuote;
+    persistQuotes(quotes);
+    return normalizedQuote;
+};
+
+export const replaceQuoteFromRemote = (quote: QuoteData): QuoteData => {
+    return upsertQuote({
+        ...quote,
+        syncStatus: 'SYNCED',
+        pendingSyncAction: undefined,
+        lastSyncedAt: quote.updatedAt || new Date().toISOString(),
+        lastServerUpdatedAt: quote.updatedAt || new Date().toISOString(),
+        syncError: undefined,
+        conflictTransactionId: undefined,
+    });
+};
+
+export const updateQuote = (id: string, updates: Partial<QuoteData>): QuoteData | null => {
+    const quotes = getQuotes();
+    const index = quotes.findIndex(quote => quote.id === id);
+
+    if (index === -1) {
+        return null;
+    }
+
+    const existingQuote = quotes[index];
+    const updatedQuote = normalizeQuote({
+        ...existingQuote,
+        ...updates,
+        parameters: updates.parameters
+            ? { ...existingQuote.parameters, ...updates.parameters }
+            : existingQuote.parameters,
+        updatedAt: updates.updatedAt || new Date().toISOString(),
+    });
+
+    quotes[index] = updatedQuote;
+    persistQuotes(quotes);
+    return updatedQuote;
 };
 
 export const deleteQuote = (id: string): void => {
     const quotes = getQuotes().filter(q => q.id !== id);
-    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(quotes));
+    persistQuotes(quotes);
 };
 
-export const updateQuoteNotes = (id: string, notes: string): void => {
-    const quotes = getQuotes().map(q =>
-        q.id === id ? { ...q, notes } : q
-    );
-    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(quotes));
+export const updateQuoteNotes = (id: string, notes: string): QuoteData | null => {
+    return updateQuote(id, { notes });
 };
 
 export const updateQuoteStatus = (id: string, status: QuoteStatus): void => {
-    const quotes = getQuotes().map(q => {
-        if (q.id === id) {
-            return {
-                ...q,
-                status,
-                statusTimeline: {
-                    ...q.statusTimeline,
-                    [status]: new Date().toISOString()
-                },
-                // If moving to DONE, allow setting completedAt logic
-                ...(status === 'DONE' && !q.statusTimeline?.DONE ? { actualPrintTime: q.actualPrintTime /* Keep if set */ } : {})
-            };
-        }
-        return q;
+    const quote = getQuoteById(id);
+    if (!quote) return;
+
+    updateQuote(id, {
+        status,
+        statusTimeline: {
+            ...quote.statusTimeline,
+            [status]: new Date().toISOString(),
+        },
+        ...(status === 'DONE' && !quote.statusTimeline?.DONE ? { actualPrintTime: quote.actualPrintTime } : {}),
     });
-    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(quotes));
 };
 
 // Materials
-export const getMaterials = (printType?: "FDM" | "Resin"): Material[] => {
+export const getMaterials = (printType?: PrintType): Material[] => {
     initializeDefaults();
     const materials: Material[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.MATERIALS) || "[]");
     return printType ? materials.filter(m => m.print_type === printType) : materials;
@@ -369,7 +488,7 @@ export const deleteMaterial = (id: string): void => {
 };
 
 // Machines
-export const getMachines = (printType?: "FDM" | "Resin"): Machine[] => {
+export const getMachines = (printType?: PrintType): Machine[] => {
     initializeDefaults();
     const machines: Machine[] = JSON.parse(localStorage.getItem(STORAGE_KEYS.MACHINES) || "[]");
     const normalized = machines.map(normalizeMachine);
@@ -438,6 +557,36 @@ export const clearResinCalculatorDraft = (): void => {
     localStorage.removeItem(STORAGE_KEYS.RESIN_CALC_DRAFT);
 };
 
+export const getLaserCalculatorDraft = <T>(): CalculatorDraft<T> | null => {
+    initializeDefaults();
+    const raw = localStorage.getItem(STORAGE_KEYS.LASER_CALC_DRAFT);
+    return raw ? (JSON.parse(raw) as CalculatorDraft<T>) : null;
+};
+
+export const saveLaserCalculatorDraft = <T>(draft: CalculatorDraft<T>): void => {
+    initializeDefaults();
+    localStorage.setItem(STORAGE_KEYS.LASER_CALC_DRAFT, JSON.stringify(draft));
+};
+
+export const clearLaserCalculatorDraft = (): void => {
+    localStorage.removeItem(STORAGE_KEYS.LASER_CALC_DRAFT);
+};
+
+export const getEmbroideryCalculatorDraft = <T>(): CalculatorDraft<T> | null => {
+    initializeDefaults();
+    const raw = localStorage.getItem(STORAGE_KEYS.EMBROIDERY_CALC_DRAFT);
+    return raw ? (JSON.parse(raw) as CalculatorDraft<T>) : null;
+};
+
+export const saveEmbroideryCalculatorDraft = <T>(draft: CalculatorDraft<T>): void => {
+    initializeDefaults();
+    localStorage.setItem(STORAGE_KEYS.EMBROIDERY_CALC_DRAFT, JSON.stringify(draft));
+};
+
+export const clearEmbroideryCalculatorDraft = (): void => {
+    localStorage.removeItem(STORAGE_KEYS.EMBROIDERY_CALC_DRAFT);
+};
+
 // Constants
 export const getConstants = (): CostConstant[] => {
     initializeDefaults();
@@ -493,6 +642,10 @@ export const resetSessionData = (): void => {
     localStorage.removeItem(STORAGE_KEYS.REVIEWS);
     localStorage.removeItem(STORAGE_KEYS.SPOOLS);
     localStorage.removeItem(STORAGE_KEYS.GCODES);
+    localStorage.removeItem(STORAGE_KEYS.FDM_CALC_DRAFT);
+    localStorage.removeItem(STORAGE_KEYS.RESIN_CALC_DRAFT);
+    localStorage.removeItem(STORAGE_KEYS.LASER_CALC_DRAFT);
+    localStorage.removeItem(STORAGE_KEYS.EMBROIDERY_CALC_DRAFT);
     initializeDefaults();
 };
 

@@ -259,6 +259,7 @@ const estimateExtrusionBreakdown = (
     flushTotal += flushGrams;
 
     toolBreakdown.push({
+      order: toolIndex + 1,
       tool: `T${toolIndex}`,
       color: colorsByTool[toolIndex],
       modelGrams: round2(modelGrams),
@@ -333,6 +334,7 @@ export function parseGcode(content: string): GcodeData {
   const perColorWeights = perColorWeightMatch ? parseNumberList(perColorWeightMatch[1]) : [];
   if (perColorWeights.length > 0) {
     colorUsages = perColorWeights.map((usedGrams, index) => ({
+      order: index + 1,
       tool: `T${index}`,
       color: colorsByTool[index],
       material: materialsByTool[index] || settingsIds[index],
@@ -509,6 +511,7 @@ export function parseGcode(content: string): GcodeData {
       const totalGrams = modelGrams + supportGrams + towerGrams + flushGrams;
 
       builtToolBreakdown.push({
+        order: index + 1,
         tool,
         color: colorsByTool[index],
         material: materialsByTool[index] || settingsIds[index],
@@ -528,6 +531,7 @@ export function parseGcode(content: string): GcodeData {
 
     toolBreakdown = builtToolBreakdown;
     colorUsages = builtToolBreakdown.map(item => ({
+      order: item.order,
       tool: item.tool,
       color: item.color,
       material: item.material,
@@ -640,6 +644,7 @@ export function parseGcode(content: string): GcodeData {
 
   if (filamentWeight === 0 && recyclable.totalGrams > 0) {
     colorUsages = recyclable.toolBreakdown.map((usage, index) => ({
+      order: usage.order ?? index + 1,
       tool: usage.tool,
       color: usage.color,
       material: materialsByTool[index] || settingsIds[index],
@@ -650,6 +655,7 @@ export function parseGcode(content: string): GcodeData {
 
   if (colorUsages.length === 0 && filamentWeight > 0) {
     colorUsages = [{
+      order: 1,
       tool: 'T0',
       color: filamentColour || undefined,
       material: filamentSettingsId || undefined,

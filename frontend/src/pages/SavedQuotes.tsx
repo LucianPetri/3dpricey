@@ -12,6 +12,8 @@ import { useNavigate } from "react-router-dom";
 import { CurrencySelector } from "@/components/shared/CurrencySelector";
 import { useCallback } from "react";
 import { useSavedQuotes } from "@/hooks/useSavedQuotes";
+import { useSyncStatus } from "@/hooks/useSyncStatus";
+import { SyncStatusBanner } from "@/components/shared/SyncStatusBanner";
 import { QuoteData } from "@/types/quote";
 
 const SavedQuotes = () => {
@@ -22,6 +24,16 @@ const SavedQuotes = () => {
         updateNotes,
         duplicateQuote,
     } = useSavedQuotes();
+    const {
+        pendingCount,
+        conflicts,
+        syncing,
+        online,
+        authenticated,
+        lastSyncedAt,
+        syncNow,
+        openConflictResolver,
+    } = useSyncStatus();
 
     const handleDeleteQuote = useCallback(async (id: string) => {
         await deleteQuote(id);
@@ -63,6 +75,18 @@ const SavedQuotes = () => {
 
             {/* Content */}
             <main className="container mx-auto px-4 py-8">
+                <div className="mb-6">
+                    <SyncStatusBanner
+                        pendingCount={pendingCount}
+                        conflictsCount={conflicts.length}
+                        syncing={syncing}
+                        online={online}
+                        authenticated={authenticated}
+                        lastSyncedAt={lastSyncedAt}
+                        onSync={() => { void syncNow(); }}
+                        onResolve={openConflictResolver}
+                    />
+                </div>
                 <SavedQuotesTable
                     quotes={quotes}
                     onDeleteQuote={handleDeleteQuote}

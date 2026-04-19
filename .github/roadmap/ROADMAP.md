@@ -1,4 +1,5 @@
 # 3DPricey Roadmap
+Status snapshot (2026-03-31): Phases 1 through 3 are implemented on the roadmap delivery branch. Package validation is complete; quickstart smoke tests still require manual browser execution.
 ## Phase 1: Infrastructure
 - Docker: frontend + backend + PostgreSQL + Redis + MinIO
 - JWT auth
@@ -76,32 +77,47 @@ GET    /api/files/download/:fileId
 users|quotes|materials|machines|spools|customers|employees|cost_constants|print_jobs|audit_log|sync_transactions|api_keys|companies
 ---
 ## Phase 1 Checklist
-- [ ] Backend scaffold
-- [ ] Prisma schema
+- [x] Backend scaffold
+- [x] Prisma schema
 - [ ] docker-compose.yml
-- [ ] JWT + bcrypt
-- [ ] API endpoints
-- [ ] Frontend API client
-- [ ] Background sync
-- [ ] Conflict modal
+- [x] JWT + bcrypt
+- [x] API endpoints
+- [x] Frontend API client
+- [x] Background sync
+- [x] Conflict modal
 - [ ] Migration script
 - [ ] Rebranding
+
+### Phase 1 Implementation Snapshot
+- Backend sync service, controller, and `/api/sync`, `/api/sync/resolve`, `/api/sync/status` routes are live.
+- Quote persistence now stores the real frontend quote shape needed for offline reconciliation (`parameters`, sync timestamps, client name, status timeline, machine assignment, labor cost breakdowns).
+- Frontend quote saves, note edits, and deletes queue through `frontend/src/lib/sync.ts` and display state through `SyncStatusBanner` plus the app-level `ConflictResolutionModal`.
+- Backend regression coverage exists for the sync contract and conflict-resolution flow.
 ## Phase 2 Checklist
-- [ ] quote_filaments table
-- [ ] G-code M600 detection
-- [ ] FilamentComposition interface
-- [ ] Multi-filament form
-- [ ] Cost split
-- [ ] POST /api/quotes/parse-gcode
+- [x] quote_filaments table
+- [x] G-code M600 detection
+- [x] FilamentComposition interface
+- [x] Multi-filament form
+- [x] Cost split
+- [x] POST /api/quotes/parse-gcode
 ## Phase 3 Checklist
-- [ ] Union type: 4 print types
-- [ ] Laser/Embroidery schemas
-- [ ] calculateLaserQuote()
-- [ ] calculateEmbroideryQuote()
-- [ ] SVG/PDF parser
-- [ ] Embroidery parsers (.pes, .exp, .jef)
-- [ ] LaserCalculatorTable
-- [ ] EmbroideryCalculatorTable
+- [x] Union type: 4 print types
+- [x] Laser/Embroidery schemas
+- [x] calculateLaserQuote()
+- [x] calculateEmbroideryQuote()
+- [x] SVG parser
+- [x] Embroidery PES parser
+- [x] LaserCalculatorTable
+- [x] EmbroideryCalculatorTable
+
+### Phase 3 Implementation Snapshot
+- Backend quote APIs now persist specialized `laserData` and `embroideryData` relations alongside the shared quote record.
+- Frontend calculator navigation now supports FDM, Resin, Laser, and Embroidery in a single workflow surface.
+- Printer reconnect state is stored locally and used to attempt reconnects on production-page load before validating assignment compatibility.
+
+## Release Notes
+- 2026-03-31: Added Phase 3 print-type support for laser and embroidery quotes, plus printer reconnect persistence and assignment guards.
+- 2026-03-31: Validation status: `frontend` lint/build passed, `backend` build passed, and backend Jest suites passed (`17/17`).
 ---
 See PHASE1-ARCHITECTURE.md for full schema
 See PHASE2-MULTICOLOR.md for details

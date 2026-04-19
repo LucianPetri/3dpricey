@@ -10,13 +10,14 @@ import { Calculator, Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { QuoteData, FDMFormData, StoredGcode, LaborItem, Machine } from "@/types/quote";
 import { useCalculatorData } from "@/hooks/useCalculatorData";
-import { calculateFDMQuote, validateFDMForm } from "@/lib/quoteCalculations";
+import { buildQuoteFilamentsFromToolBreakdown, calculateFDMQuote, getQuoteFilamentSegments, normalizeQuoteFilaments, validateFDMForm } from "@/lib/quoteCalculations";
 import { QuoteCalculator } from "./QuoteCalculator";
 import { FormFieldRow, TextField, SelectField } from "./FormField";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConsumablesSelector } from "./ConsumablesSelector";
 import GcodeUpload from "./GcodeUpload";
+import FilamentCompositionForm from "./FilamentCompositionForm";
 import { GcodeData } from "@/lib/parsers/gcodeParser";
 import { useCurrency } from "@/hooks/useCurrency";
 import { ClientSelector } from "@/components/shared/ClientSelector";
@@ -26,10 +27,10 @@ import { useStoredGcodes } from "@/hooks/useStoredGcodes";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { getSpools } from "@/lib/core/sessionStorage";
-import { HexColorSwatch } from "@/components/shared/HexColorSwatch";
 
 interface FDMCalculatorProps {
   onCalculate: (data: QuoteData) => void;
+  initialQuote?: QuoteData | null;
 }
 
 const initialFormData: FDMFormData = {
@@ -46,13 +47,13 @@ const initialFormData: FDMFormData = {
   priority: "Medium",
   dueDate: "",
   selectedConsumableIds: [],
-  filePath: "", // Store uploaded file path
+  filePath: "",
   customerId: "",
-
   clientName: "",
   assignedEmployeeId: "",
   colorUsages: [],
   toolBreakdown: [],
+  quoteFilaments: [],
   recyclableColorUsages: [],
   recyclableTotals: {
     supportGrams: 0,
@@ -63,7 +64,7 @@ const initialFormData: FDMFormData = {
   },
 };
 
-const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
+const FDMCalculatorTable = memo(({ onCalculate, initialQuote }: FDMCalculatorProps) => {
   const { materials, machines, constants, loading, getConstantValue } = useCalculatorData({ printType: "FDM" });
   const [formData, setFormData] = useState<FDMFormData>(initialFormData);
   const [selectedSpoolId, setSelectedSpoolId] = useState<string | undefined>(undefined);
@@ -73,14 +74,12 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
   const [allMachines, setAllMachines] = useState<Machine[]>([]);
   const { gcodes, saveGcode } = useStoredGcodes();
 
-  // Filter for FDM files only (has filament weight and no resin volume)
   const filteredGcodes = useMemo(() => {
     return gcodes.filter(g => (g.filamentWeight || 0) > 0 && !g.resinVolume);
   }, [gcodes]);
 
   const [currentGcodeData, setCurrentGcodeData] = useState<GcodeData | null>(null);
 
-  // Load employees on mount
   useEffect(() => {
     setEmployees(getEmployees());
     setLaborItems(getLaborItems());
@@ -95,6 +94,9 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
       ...draft.formData,
       laborSelections: draft.formData.laborSelections || [],
       selectedConsumableIds: draft.formData.selectedConsumableIds || [],
+      quoteFilaments: normalizeQuoteFilaments(
+        draft.formData.quoteFilaments || buildQuoteFilamentsFromToolBreakdown(draft.formData.toolBreakdown || [])
+      ),
     });
     setSelectedSpoolId(draft.selectedSpoolId);
   }, []);
@@ -102,6 +104,58 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
   useEffect(() => {
     saveFdmCalculatorDraft({ formData, selectedSpoolId });
   }, [formData, selectedSpoolId]);
+
+  const toInputString = useCallback((value: unknown) => {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" && Number.isFinite(value)) return value.toString();
+    return "";
+  }, []);
+
+  useEffect(() => {
+    if (!initialQuote || initialQuote.printType !== "FDM") {
+      return;
+    }
+
+    const parameters = initialQuote.parameters as Partial<FDMFormData>;
+    const toolBreakdown = Array.isArray(parameters.toolBreakdown) ? parameters.toolBreakdown : [];
+    const quoteFilaments = normalizeQuoteFilaments(
+      Array.isArray(initialQuote.quoteFilaments) && initialQuote.quoteFilaments.length > 0
+        ? initialQuote.quoteFilaments
+        : Array.isArray(parameters.quoteFilaments) && parameters.quoteFilaments.length > 0
+          ? parameters.quoteFilaments
+          : buildQuoteFilamentsFromToolBreakdown(toolBreakdown)
+    );
+    const totalWeight = quoteFilaments.reduce((sum, segment) => sum + segment.weightGrams, 0);
+
+    setFormData({
+      ...initialFormData,
+      ...parameters,
+      projectName: initialQuote.projectName,
+      printColour: initialQuote.printColour,
+      materialId: parameters.materialId || quoteFilaments[0]?.materialId || "",
+      machineId: parameters.machineId || "",
+      printTime: toInputString(parameters.printTime),
+      filamentWeight: totalWeight > 0 ? totalWeight.toString() : toInputString(parameters.filamentWeight),
+      laborSelections: parameters.laborSelections || [],
+      overheadPercentage: toInputString(parameters.overheadPercentage),
+      markupPercentage: toInputString(parameters.markupPercentage || "20"),
+      quantity: toInputString(initialQuote.quantity || parameters.quantity || "1"),
+      selectedConsumableIds: parameters.selectedConsumableIds || [],
+      filePath: initialQuote.filePath || parameters.filePath || "",
+      customerId: initialQuote.customerId || parameters.customerId || "",
+      clientName: initialQuote.clientName || parameters.clientName || "",
+      priority: initialQuote.priority || parameters.priority || "Medium",
+      dueDate: initialQuote.dueDate || parameters.dueDate || "",
+      assignedEmployeeId: initialQuote.assignedEmployeeId || parameters.assignedEmployeeId || "",
+      colorUsages: parameters.colorUsages || [],
+      toolBreakdown,
+      quoteFilaments,
+      recyclableColorUsages: parameters.recyclableColorUsages || [],
+      recyclableTotals: parameters.recyclableTotals || initialFormData.recyclableTotals,
+    });
+    setSelectedSpoolId((parameters.selectedSpoolId as string | undefined) || quoteFilaments.find((segment) => !!segment.spoolId)?.spoolId);
+    setCurrentGcodeData(null);
+  }, [initialQuote, toInputString]);
 
   const selectedEmployee = useMemo(() => {
     if (!formData.assignedEmployeeId) return undefined;
@@ -187,64 +241,67 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
         // No machine match found
       }
 
-      // Match material from filament_settings_id
-      if (data.filamentSettingsId) {
-        const normalizedMaterial = normalize(data.filamentSettingsId);
-
-        const matchedMaterial = materials.find(m => {
-          const normalizedName = normalize(m.name);
-          return normalizedName.includes(normalizedMaterial) ||
-            normalizedMaterial.includes(normalizedName);
-        });
-
-        if (matchedMaterial) {
-          matchedMaterialId = matchedMaterial.id;
-          toast.info(`Auto-selected material: ${matchedMaterial.name}`);
-        } else {
-          // No material match found
-        }
-      }
-
-      const resolveMaterialId = (materialName?: string) => {
-        if (!materialName) return undefined;
-        const normalizedMaterialName = normalize(materialName);
-        const found = materials.find(item => {
-          const normalizedName = normalize(item.name);
-          return normalizedName === normalizedMaterialName
-            || normalizedName.includes(normalizedMaterialName)
-            || normalizedMaterialName.includes(normalizedName);
-        });
-        return found?.id;
-      };
-
-      const mappedToolBreakdown = (data.toolBreakdown || []).map(item => ({
-        ...item,
-        materialId: resolveMaterialId(item.material) || matchedMaterialId || item.materialId,
-      }));
-
-      const mappedColorUsages = (data.colorUsages || []).map(item => ({
-        ...item,
-        materialId: resolveMaterialId(item.material) || matchedMaterialId || item.materialId,
-      }));
-
-      setFormData(prev => ({
-        ...prev,
-        projectName: data.fileName ? data.fileName.substring(0, data.fileName.lastIndexOf('.')) || data.fileName : prev.projectName,
-        printTime: data.printTimeHours > 0 ? data.printTimeHours.toString() : prev.printTime,
-        filamentWeight: data.filamentWeightGrams > 0 ? data.filamentWeightGrams.toString() : prev.filamentWeight,
-        machineId: matchedMachineId || prev.machineId,
-        materialId: matchedMaterialId || prev.materialId,
-        printColour: data.filamentColour || prev.printColour,
-        filePath: data.filePath || prev.filePath, // Store the file path
-        colorUsages: mappedColorUsages.length > 0 ? mappedColorUsages : prev.colorUsages,
-        toolBreakdown: mappedToolBreakdown.length > 0 ? mappedToolBreakdown : prev.toolBreakdown,
-        recyclableColorUsages: data.recyclableColorUsages || prev.recyclableColorUsages,
-        recyclableTotals: data.recyclableTotals || prev.recyclableTotals,
-      }));
-
-      // Keep track of current Gcode data for saving
-      setCurrentGcodeData(data);
     }
+
+    // Match material from filament_settings_id
+    if (data.filamentSettingsId) {
+      const normalizedMaterial = normalize(data.filamentSettingsId);
+
+      const matchedMaterial = materials.find(m => {
+        const normalizedName = normalize(m.name);
+        return normalizedName.includes(normalizedMaterial) ||
+          normalizedMaterial.includes(normalizedName);
+      });
+
+      if (matchedMaterial) {
+        matchedMaterialId = matchedMaterial.id;
+        toast.info(`Auto-selected material: ${matchedMaterial.name}`);
+      } else {
+        // No material match found
+      }
+    }
+
+    const resolveMaterialId = (materialName?: string) => {
+      if (!materialName) return undefined;
+      const normalizedMaterialName = normalize(materialName);
+      const found = materials.find(item => {
+        const normalizedName = normalize(item.name);
+        return normalizedName === normalizedMaterialName
+          || normalizedName.includes(normalizedMaterialName)
+          || normalizedMaterialName.includes(normalizedName);
+      });
+      return found?.id;
+    };
+
+    const mappedToolBreakdown = (data.toolBreakdown || []).map(item => ({
+      ...item,
+      materialId: resolveMaterialId(item.material) || matchedMaterialId || item.materialId,
+    }));
+    const mappedQuoteFilaments = buildQuoteFilamentsFromToolBreakdown(mappedToolBreakdown);
+
+    const mappedColorUsages = (data.colorUsages || []).map(item => ({
+      ...item,
+      materialId: resolveMaterialId(item.material) || matchedMaterialId || item.materialId,
+    }));
+
+    setFormData(prev => ({
+      ...prev,
+      projectName: data.fileName ? data.fileName.substring(0, data.fileName.lastIndexOf('.')) || data.fileName : prev.projectName,
+      printTime: data.printTimeHours > 0 ? data.printTimeHours.toString() : prev.printTime,
+      filamentWeight: data.filamentWeightGrams > 0 ? data.filamentWeightGrams.toString() : prev.filamentWeight,
+      machineId: matchedMachineId || prev.machineId,
+      materialId: matchedMaterialId || prev.materialId,
+      printColour: data.filamentColour || prev.printColour,
+      filePath: data.filePath || prev.filePath, // Store the file path
+      colorUsages: mappedColorUsages.length > 0 ? mappedColorUsages : prev.colorUsages,
+      toolBreakdown: mappedToolBreakdown.length > 0 ? mappedToolBreakdown : prev.toolBreakdown,
+      quoteFilaments: mappedQuoteFilaments.length > 0 ? mappedQuoteFilaments : prev.quoteFilaments,
+      recyclableColorUsages: data.recyclableColorUsages || prev.recyclableColorUsages,
+      recyclableTotals: data.recyclableTotals || prev.recyclableTotals,
+    }));
+
+    // Keep track of current Gcode data for saving
+    setCurrentGcodeData(data);
   }, [machines, materials]);
 
   const handleSavedGcodeSelect = useCallback((gcodeId: string) => {
@@ -273,8 +330,8 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
     if (!currentGcodeData) return;
 
     // Find material and machine names for better storage metadata
-    const mappedMaterialNames = (formData.toolBreakdown || [])
-      .map(item => item.material)
+    const mappedMaterialNames = (formData.quoteFilaments || [])
+      .map(item => item.materialName)
       .filter((name): name is string => !!name);
     const materialName = mappedMaterialNames.length > 0
       ? Array.from(new Set(mappedMaterialNames)).join(', ')
@@ -439,7 +496,9 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
       return;
     }
 
-    const selectedMaterialId = formData.toolBreakdown?.find(item => !!item.materialId)?.materialId || formData.materialId;
+    const selectedMaterialId = getQuoteFilamentSegments(formData)[0]?.materialId
+      || formData.toolBreakdown?.find(item => !!item.materialId)?.materialId
+      || formData.materialId;
     const selectedMaterial = materials.find(m => m.id === selectedMaterialId);
     const selectedMachine = machines.find(m => m.id === formData.machineId);
     const selectedConsumables = constants
@@ -506,61 +565,61 @@ const FDMCalculatorTable = memo(({ onCalculate }: FDMCalculatorProps) => {
     });
   }, [formData.toolBreakdown]);
 
-  const handleToolMaterialChange = useCallback((tool: string, materialId: string) => {
-    const selectedMaterial = fdmMaterials.find(item => item.id === materialId);
-    setFormData(prev => {
-      const updatedBreakdown = (prev.toolBreakdown || []).map(item => (
-        item.tool === tool
-            ? { ...item, materialId, material: selectedMaterial?.name || item.material, spoolId: undefined }
-          : item
-      ));
-
-      const updatedColorUsages = (prev.colorUsages || []).map(item => (
-        item.tool === tool
-            ? { ...item, materialId, material: selectedMaterial?.name || item.material, spoolId: undefined }
-          : item
-      ));
+  const handleQuoteFilamentsChange = useCallback((segments: FDMFormData["quoteFilaments"] = []) => {
+    const nextSegments = normalizeQuoteFilaments(segments || []).map((segment) => {
+      const selectedSpool = segment.spoolId ? allSpools.find((item) => item.id === segment.spoolId) : undefined;
+      const materialId = selectedSpool?.materialId || segment.materialId;
+      const selectedMaterial = fdmMaterials.find((item) => item.id === materialId);
 
       return {
-        ...prev,
-        toolBreakdown: updatedBreakdown,
-        colorUsages: updatedColorUsages,
+        ...segment,
+        materialId,
+        materialName: selectedMaterial?.name || segment.materialName,
+        color: segment.color || selectedSpool?.color,
       };
     });
-  }, [fdmMaterials]);
 
-  const handleToolSpoolChange = useCallback((tool: string, spoolId: string) => {
-    const selectedSpool = allSpools.find(item => item.id === spoolId);
-    if (!selectedSpool) return;
-    const selectedMaterial = fdmMaterials.find(item => item.id === selectedSpool.materialId);
+    setFormData((prev) => {
+      const segmentByTool = new Map(nextSegments.filter((segment) => !!segment.tool).map((segment) => [segment.tool!, segment]));
+      const updatedBreakdown = (prev.toolBreakdown || []).map((item) => {
+        const segment = segmentByTool.get(item.tool);
+        if (!segment) {
+          return item;
+        }
 
-    setFormData(prev => {
-      const updatedBreakdown = (prev.toolBreakdown || []).map(item => (
-        item.tool === tool
-          ? {
-            ...item,
-            spoolId,
-            materialId: selectedSpool.materialId,
-            material: selectedMaterial?.name || item.material,
-            color: item.color || selectedSpool.color,
-          }
-          : item
-      ));
+        return {
+          ...item,
+          materialId: segment.materialId || item.materialId,
+          material: segment.materialName || item.material,
+          spoolId: segment.spoolId,
+          color: segment.color || item.color,
+        };
+      });
 
-      const updatedColorUsages = (prev.colorUsages || []).map(item => (
-        item.tool === tool
-          ? {
-            ...item,
-            spoolId,
-            materialId: selectedSpool.materialId,
-            material: selectedMaterial?.name || item.material,
-            color: item.color || selectedSpool.color,
-          }
-          : item
-      ));
+      const updatedColorUsages = (prev.colorUsages || []).map((item) => {
+        const segment = segmentByTool.get(item.tool);
+        if (!segment) {
+          return item;
+        }
+
+        return {
+          ...item,
+          materialId: segment.materialId || item.materialId,
+          material: segment.materialName || item.material,
+          spoolId: segment.spoolId,
+          color: segment.color || item.color,
+        };
+      });
+
+      const totalWeight = nextSegments.reduce((sum, segment) => sum + segment.weightGrams, 0);
+      const mappedColors = Array.from(new Set(nextSegments.map((segment) => segment.color).filter((color): color is string => !!color)));
 
       return {
         ...prev,
+        materialId: nextSegments.find((segment) => !!segment.materialId)?.materialId || prev.materialId,
+        printColour: mappedColors.length > 0 ? mappedColors.join(', ') : prev.printColour,
+        filamentWeight: totalWeight > 0 ? totalWeight.toString() : prev.filamentWeight,
+        quoteFilaments: nextSegments,
         toolBreakdown: updatedBreakdown,
         colorUsages: updatedColorUsages,
       };

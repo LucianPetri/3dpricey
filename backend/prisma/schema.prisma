@@ -57,6 +57,8 @@ model Quote {
   machineTimeCost Float
   electricityCost Float
   laborCost       Float
+  laborConsumablesCost Float?
+  laborMachineCost Float?
   overheadCost    Float
   subtotal        Float
   markup          Float
@@ -65,10 +67,14 @@ model Quote {
   quantity        Int             @default(1)
   unitPrice       Float
   notes           String?
+  clientName      String?
   status          String          @default("PENDING")
   priority        String?
   dueDate         DateTime?
   filePath        String?
+  assignedMachineId String?
+  statusTimeline  Json?
+  parameters      Json?
   filamentWeight  Float?
   printTime       Float?
   laborHours      Float?
@@ -78,6 +84,8 @@ model Quote {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   quoteFilaments  QuoteFilament[]
+  laserData       LaserQuoteData?
+  embroideryData  EmbroideryQuoteData?
   printJob        PrintJob?
   auditLog        AuditLog[]
 }
@@ -96,6 +104,7 @@ model Material {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   spools      MaterialSpool[]
+  quoteFilaments QuoteFilament[]
 }
 
 model Machine {
@@ -111,6 +120,7 @@ model Machine {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
   printJobs        PrintJob[]
+  printerConnectionState PrinterConnectionState?
 }
 
 model MaterialSpool {
@@ -190,6 +200,7 @@ model SyncTransaction {
   id            String   @id @default(cuid())
   userId        String
   quoteId       String
+  changeId      String?
   operation     String
   tableName     String
   localChanges  Json
@@ -207,7 +218,68 @@ model QuoteFilament {
   quoteId     String
   quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   materialId  String
+  material    Material @relation(fields: [materialId], references: [id])
   weightGrams Float
   order       Int
+  tool        String?
+  color       String?
+  spoolId     String?
+  materialName String?
+  modelGrams  Float?
+  supportGrams Float?
+  towerGrams  Float?
+  flushGrams  Float?
   createdAt   DateTime @default(now())
+
+  @@unique([quoteId, order])
+  @@index([materialId])
+}
+
+model LaserQuoteData {
+  id                     String   @id @default(cuid())
+  quoteId                String   @unique
+  quote                  Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  materialId             String
+  designPath             String?
+  designWidth            Float
+  designHeight           Float
+  estimatedCutTime       Float
+  estimatedEngravingTime Float?
+  materialSurfaceArea    Float
+  laserPower             Float?
+  focusLensReplacement   Boolean  @default(false)
+  laserTubeAge           Int?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model EmbroideryQuoteData {
+  id                       String   @id @default(cuid())
+  quoteId                  String   @unique
+  quote                    Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  designPath               String?
+  stitchCount              Int
+  designWidth              Float
+  designHeight             Float
+  estimatedEmbroideryTime  Float
+  baseGarmentCost          Float
+  threadCount              Int
+  needleSize               String?
+  backingMaterialId        String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model PrinterConnectionState {
+  id              String   @id @default(cuid())
+  machineId       String   @unique
+  machine         Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  status          String
+  connectionType  String
+  lastSeenAt      DateTime?
+  lastReconnectAt DateTime?
+  reconnectError  String?
+  assignedJobId   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

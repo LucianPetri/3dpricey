@@ -74,6 +74,10 @@
 
 - What happens when [boundary condition]?
 - How does system handle [error scenario]?
+- How does the feature behave when local persisted data exists, remote sync is delayed,
+  or the backend is unavailable?
+- What happens if quote calculations, parser extraction, or stock totals receive
+  incomplete, malformed, or partially migrated data?
 
 ## Requirements *(mandatory)*
 
@@ -89,11 +93,15 @@
 - **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
 - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
 - **FR-005**: System MUST [behavior, e.g., "log all security events"]
+- **FR-006**: Specification MUST identify which frontend, backend, storage, parser,
+  calculation, and documentation surfaces are affected.
+- **FR-007**: Specification MUST state whether the feature preserves offline-first
+  behavior or requires an explicit migration or change in data authority.
 
 *Example of marking unclear requirements:*
 
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+- **FR-008**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
+- **FR-009**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
 
 ### Key Entities *(include if feature involves data)*
 
@@ -126,3 +134,12 @@
 - [Assumption about scope boundaries, e.g., "Mobile support is out of scope for v1"]
 - [Assumption about data/environment, e.g., "Existing authentication system will be reused"]
 - [Dependency on existing system/service, e.g., "Requires access to the existing user profile API"]
+
+## Documentation & Validation Impact *(mandatory)*
+
+- **Documentation Updates**: List each .github guide or operational doc that MUST
+  change if this feature ships.
+- **Validation Plan**: List the lint, build, test, and manual workflow checks required
+  to verify the feature safely in this repository.
+- **Deployment/Security Notes**: State whether auth, secrets, Docker, environment
+  variables, database schema, storage keys, or sync flows are affected.

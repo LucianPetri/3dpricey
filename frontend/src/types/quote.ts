@@ -8,6 +8,42 @@
 // Centralized types for the quote calculator application
 
 export type QuoteStatus = 'PENDING' | 'APPROVED' | 'PRINTING' | 'POST_PROCESSING' | 'DONE' | 'DISPATCHED' | 'DELIVERED' | 'FAILED';
+export type SyncAction = 'create' | 'update' | 'delete';
+export type QuoteSyncStatus = 'LEGACY_LOCAL' | 'PENDING_SYNC' | 'SYNCED' | 'CONFLICT' | 'SYNC_FAILED';
+export type PrintType = 'FDM' | 'Resin' | 'Laser' | 'Embroidery';
+
+export interface QuoteFilamentSegment {
+  id?: string;
+  materialId: string;
+  weightGrams: number;
+  order: number;
+  tool?: string;
+  color?: string;
+  spoolId?: string;
+  materialName?: string;
+  modelGrams?: number;
+  supportGrams?: number;
+  towerGrams?: number;
+  flushGrams?: number;
+}
+
+export interface QuoteSyncConflictField {
+  field: string;
+  localValue: unknown;
+  serverValue: unknown;
+  updatedBy?: string;
+}
+
+export interface QuoteSyncConflict {
+  id: string;
+  changeId: string;
+  transactionId: string;
+  resourceType: 'quote' | 'material' | 'machine';
+  resourceId: string;
+  fields: QuoteSyncConflictField[];
+  localVersion: Record<string, unknown>;
+  serverVersion: Record<string, unknown>;
+}
 
 export interface QuoteData {
   id?: string;
@@ -23,15 +59,17 @@ export interface QuoteData {
   totalPrice: number;
   unitPrice: number;  // Price per single unit
   quantity: number;   // Number of units
-  printType: "FDM" | "Resin";
+  printType: PrintType;
   projectName: string;
   printColour: string;
   parameters: QuoteParameters;
   createdAt?: string;
+  updatedAt?: string;
   notes?: string;
   filePath?: string;  // Original uploaded file path for printing
   customerId?: string; // Reference to a customer
   clientName?: string; // Snapshot of name for display/legacy
+  quoteFilaments?: QuoteFilamentSegment[];
   // Kanban Fields
   status?: QuoteStatus;
   assignedMachineId?: string;
@@ -40,6 +78,12 @@ export interface QuoteData {
   priority?: 'Low' | 'Medium' | 'High';
   dueDate?: string; // ISO date string
   assignedEmployeeId?: string; // ID of assigned employee
+  syncStatus?: QuoteSyncStatus;
+  pendingSyncAction?: SyncAction;
+  lastSyncedAt?: string;
+  lastServerUpdatedAt?: string;
+  syncError?: string;
+  conflictTransactionId?: string;
 }
 
 export interface Customer {
@@ -101,6 +145,8 @@ export interface QuoteParameters {
   laborMachinesUsed?: LaborMachineUsage[];
   laborSelections?: LaborSelection[];
   colorUsages?: FilamentColorUsage[];
+  toolBreakdown?: FilamentToolBreakdown[];
+  quoteFilaments?: QuoteFilamentSegment[];
   recyclableColorUsages?: RecyclableColorUsage[];
   recyclableTotals?: {
     supportGrams: number;
@@ -144,6 +190,7 @@ export interface LaborMachineUsage {
 }
 
 export interface FilamentColorUsage {
+  order?: number;
   tool: string;
   color?: string;
   material?: string;
@@ -153,6 +200,7 @@ export interface FilamentColorUsage {
 }
 
 export interface FilamentToolBreakdown {
+  order?: number;
   tool: string;
   color?: string;
   material?: string;
@@ -186,7 +234,7 @@ export interface Material {
   name: string;
   cost_per_unit: number;
   unit: string;
-  print_type: "FDM" | "Resin";
+  print_type: PrintType;
   totalInStock?: number;
   lowStockThreshold?: number;
 }
@@ -200,7 +248,7 @@ export interface Machine {
   lifetime_years?: number;
   maintenance_percentage?: number;
   power_consumption_watts: number | null;
-  print_type: "FDM" | "Resin";
+  print_type: PrintType;
 }
 
 export interface CostConstant {
@@ -234,6 +282,7 @@ export interface FDMFormData {
   colorUsages?: FilamentColorUsage[];
   toolBreakdown?: FilamentToolBreakdown[];
   recyclableColorUsages?: RecyclableColorUsage[];
+  quoteFilaments?: QuoteFilamentSegment[];
   recyclableTotals?: {
     supportGrams: number;
     towerGrams: number;
@@ -264,6 +313,51 @@ export interface ResinFormData {
   assignedEmployeeId?: string; // ID of assigned employee
 }
 
+export interface LaserFormData {
+  projectName: string;
+  printColour: string;
+  materialId: string;
+  machineId: string;
+  designWidth: string;
+  designHeight: string;
+  estimatedCutTime: string;
+  estimatedEngravingTime: string;
+  materialSurfaceArea: string;
+  laborHours: string;
+  laserPower: string;
+  focusLensReplacement: boolean;
+  laserTubeAge: string;
+  overheadPercentage: string;
+  markupPercentage: string;
+  quantity: string;
+  selectedConsumableIds: string[];
+  filePath?: string;
+  customerId?: string;
+  clientName?: string;
+}
+
+export interface EmbroideryFormData {
+  projectName: string;
+  printColour: string;
+  machineId: string;
+  selectedBackingId: string;
+  designWidth: string;
+  designHeight: string;
+  stitchCount: string;
+  estimatedEmbroideryTime: string;
+  baseGarmentCost: string;
+  threadColors: string;
+  laborHours: string;
+  needleSize: string;
+  overheadPercentage: string;
+  markupPercentage: string;
+  quantity: string;
+  selectedConsumableIds: string[];
+  filePath?: string;
+  customerId?: string;
+  clientName?: string;
+}
+
 export interface QuoteStats {
   totalQuotes: number;
   totalRevenue: number;
@@ -271,6 +365,8 @@ export interface QuoteStats {
   avgQuoteValue: number;
   fdmCount: number;
   resinCount: number;
+  laserCount: number;
+  embroideryCount: number;
   recentQuotes: number;
 }
 
@@ -341,7 +437,7 @@ export interface StockItem {
   quantity: number;
   unitPrice: number; // Cost per unit
   totalCost: number;
-  printType: "FDM" | "Resin";
+  printType: PrintType;
   material?: string;
   color?: string;
   createdAt: string;
@@ -367,7 +463,7 @@ export interface StoredGcode {
   resinVolume?: number; // ml (for Resin printers)
   machineName?: string;
   materialName?: string;
-  printType?: "FDM" | "Resin";
+  printType?: PrintType;
   thumbnail?: string;
   colorUsages?: FilamentColorUsage[];
   toolBreakdown?: FilamentToolBreakdown[];

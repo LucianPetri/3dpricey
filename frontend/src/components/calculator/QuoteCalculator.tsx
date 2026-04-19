@@ -15,9 +15,10 @@ interface QuoteCalculatorProps {
   onReset?: () => void;
   children: React.ReactNode;
   uploadSection?: React.ReactNode;
+  statusBanner?: React.ReactNode;
 }
 
-export const QuoteCalculator = memo(({ loading, onCalculate, onReset, children, uploadSection }: QuoteCalculatorProps) => {
+export const QuoteCalculator = memo(({ loading, onCalculate, onReset, children, uploadSection, statusBanner }: QuoteCalculatorProps) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -32,6 +33,7 @@ export const QuoteCalculator = memo(({ loading, onCalculate, onReset, children, 
   return (
     <div className="space-y-6">
       {uploadSection}
+      {statusBanner}
 
       <div className="border border-border rounded-xl shadow-card bg-gradient-to-br from-card/80 to-card/40 p-3 sm:p-4">
         <div className="flex flex-wrap gap-3 [&>*]:w-full xl:[&>*]:w-[calc(50%-0.375rem)] [&>.calculator-full-span]:xl:!w-full">

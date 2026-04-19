@@ -7,10 +7,12 @@
 
 import { useState, useCallback, memo, lazy, Suspense } from "react";
 import { Card } from "@/components/ui/card";
-import { Printer, RotateCcw, Settings, Loader2, Calculator, FileText, BarChart3, Package } from "lucide-react";
+import { Printer, RotateCcw, Settings, Loader2, Calculator, FileText, BarChart3, Package, Scissors, Shirt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import FDMCalculatorTable from "@/components/calculator/FDMCalculatorTable";
 import ResinCalculatorTable from "@/components/calculator/ResinCalculatorTable";
+import LaserCalculatorTable from "@/components/calculator/LaserCalculatorTable";
+import EmbroideryCalculatorTable from "@/components/calculator/EmbroideryCalculatorTable";
 import QuoteSummary from "@/components/quotes/QuoteSummary";
 import { Link } from "react-router-dom";
 import { CurrencySelector } from "@/components/shared/CurrencySelector";
@@ -19,6 +21,8 @@ import { QuoteData } from "@/types/quote";
 import { useSavedQuotes } from "@/hooks/useSavedQuotes";
 import { useBatchQuote } from "@/hooks/useBatchQuote";
 import { useCurrency } from "@/hooks/useCurrency";
+import { useSyncStatus } from "@/hooks/useSyncStatus";
+import { SyncStatusBanner } from "@/components/shared/SyncStatusBanner";
 import WhatsNewDialog from "@/components/feedback/WhatsNewDialog";
 import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
 import { LicenseUpdateAnnouncement } from "@/components/feedback/LicenseUpdateAnnouncement";
@@ -27,9 +31,26 @@ import { BrandAnnouncement } from "@/components/feedback/BrandAnnouncement";
 const SavedQuotesTable = lazy(() => import("@/components/quotes/SavedQuotesTable"));
 const QuotesDashboard = lazy(() => import("@/components/dashboard/QuotesDashboard").then(module => ({ default: module.QuotesDashboard })));
 
+type CalculatorTab = "fdm" | "resin" | "laser" | "embroidery";
+
+const TAB_LABELS: Record<CalculatorTab, string> = {
+  fdm: "FDM Calculator",
+  resin: "Resin Calculator",
+  laser: "Laser Calculator",
+  embroidery: "Embroidery Calculator",
+};
+
+const getTabFromQuote = (quote: QuoteData): CalculatorTab => {
+  if (quote.printType === "Resin") return "resin";
+  if (quote.printType === "Laser") return "laser";
+  if (quote.printType === "Embroidery") return "embroidery";
+  return "fdm";
+};
+
 const Index = memo(() => {
   const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
-  const [activeTab, setActiveTab] = useState<"fdm" | "resin">("fdm");
+  const [editingQuote, setEditingQuote] = useState<QuoteData | null>(null);
+  const [activeTab, setActiveTab] = useState<CalculatorTab>("fdm");
   const { formatPrice } = useCurrency();
 
   const [resetKey, setResetKey] = useState(0);
@@ -43,11 +64,22 @@ const Index = memo(() => {
     updateNotes,
     duplicateQuote,
   } = useSavedQuotes();
+  const {
+    pendingCount,
+    conflicts,
+    syncing,
+    online,
+    authenticated,
+    lastSyncedAt,
+    syncNow,
+    openConflictResolver,
+  } = useSyncStatus();
 
   const { clearBatch } = useBatchQuote();
 
   const handleReset = useCallback(() => {
     setQuoteData(null);
+    setEditingQuote(null);
     clearBatch();
     setResetKey(prev => prev + 1);
   }, [clearBatch]);
@@ -67,6 +99,13 @@ const Index = memo(() => {
   const handleDuplicateQuote = useCallback(async (quote: QuoteData) => {
     await duplicateQuote(quote);
   }, [duplicateQuote]);
+
+  const handleEditQuote = useCallback((quote: QuoteData) => {
+    setActiveTab(getTabFromQuote(quote));
+    setEditingQuote({ ...quote });
+    setQuoteData({ ...quote });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -107,6 +146,28 @@ const Index = memo(() => {
             >
               <Printer className="w-5 h-5 flex-shrink-0" />
               <span className="text-sm font-medium">Resin Printing</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("laser")}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                activeTab === "laser"
+                  ? "bg-gradient-to-r from-emerald-600/30 to-cyan-600/30 border border-emerald-500/40 text-emerald-300"
+                  : "text-slate-400 hover:text-emerald-300 hover:bg-slate-800/50"
+              }`}
+            >
+              <Scissors className="w-5 h-5 flex-shrink-0" />
+              <span className="text-sm font-medium">Laser Cutting</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("embroidery")}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                activeTab === "embroidery"
+                  ? "bg-gradient-to-r from-emerald-600/30 to-cyan-600/30 border border-emerald-500/40 text-emerald-300"
+                  : "text-slate-400 hover:text-emerald-300 hover:bg-slate-800/50"
+              }`}
+            >
+              <Shirt className="w-5 h-5 flex-shrink-0" />
+              <span className="text-sm font-medium">Embroidery</span>
             </button>
           </div>
 
@@ -194,9 +255,9 @@ const Index = memo(() => {
           <div className="px-8 py-4 flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-white">
-                {activeTab === "fdm" ? "FDM Calculator" : "Resin Calculator"}
+                {TAB_LABELS[activeTab]}
               </h2>
-              <p className="text-sm text-emerald-300/70 mt-1">Professional 3D printing cost estimation</p>
+              <p className="text-sm text-emerald-300/70 mt-1">Professional fabrication cost estimation</p>
             </div>
             {quoteData && (
               <div className="flex items-center gap-4 px-6 py-3 rounded-lg border border-emerald-500/30 bg-gradient-to-r from-emerald-950/40 to-cyan-950/40">
@@ -211,6 +272,19 @@ const Index = memo(() => {
 
         <div className="flex-1 overflow-auto">
           <div className="px-8 py-8 pb-20">
+            <div className="mb-6">
+              <SyncStatusBanner
+                pendingCount={pendingCount}
+                conflictsCount={conflicts.length}
+                syncing={syncing}
+                online={online}
+                authenticated={authenticated}
+                lastSyncedAt={lastSyncedAt}
+                onSync={() => { void syncNow(); }}
+                onResolve={openConflictResolver}
+              />
+            </div>
+
             {/* Stats Dashboard */}
             {stats.totalQuotes > 0 && (
               <div className="mb-8">
@@ -226,10 +300,16 @@ const Index = memo(() => {
               <Card className="shadow-elevated border-emerald-900/30 bg-gradient-to-br from-slate-900 to-slate-950 overflow-hidden hover-glow">
                 <div className="p-6">
                   {activeTab === "fdm" && (
-                    <FDMCalculatorTable key={`fdm-${resetKey}`} onCalculate={setQuoteData} />
+                    <FDMCalculatorTable key={`fdm-${resetKey}`} onCalculate={setQuoteData} initialQuote={editingQuote} />
                   )}
                   {activeTab === "resin" && (
                     <ResinCalculatorTable key={`resin-${resetKey}`} onCalculate={setQuoteData} />
+                  )}
+                  {activeTab === "laser" && (
+                    <LaserCalculatorTable key={`laser-${resetKey}`} onCalculate={setQuoteData} initialQuote={editingQuote} />
+                  )}
+                  {activeTab === "embroidery" && (
+                    <EmbroideryCalculatorTable key={`embroidery-${resetKey}`} onCalculate={setQuoteData} initialQuote={editingQuote} />
                   )}
                 </div>
               </Card>
@@ -273,6 +353,7 @@ const Index = memo(() => {
                     onDeleteQuote={handleDeleteQuote}
                     onUpdateNotes={handleUpdateNotes}
                     onDuplicateQuote={handleDuplicateQuote}
+                    onEditQuote={handleEditQuote}
                   />
                 </Suspense>
               )}

@@ -40,6 +40,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+const getMachinePrintTypeBadgeClass = (printType: Machine["print_type"]) => {
+  if (printType === "FDM") return "bg-primary/10 text-primary";
+  if (printType === "Resin") return "bg-purple-500/10 text-purple-600";
+  if (printType === "Laser") return "bg-amber-500/10 text-amber-600";
+  return "bg-rose-500/10 text-rose-600";
+};
+
 // --- Machines Form Component ---
 interface MachinesFormProps {
   initialData?: Machine | null;
@@ -56,7 +63,7 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
     lifetime_years: "",
     maintenance_percentage: "",
     power_consumption_watts: "",
-    print_type: "FDM" as "FDM" | "Resin",
+    print_type: "FDM" as Machine["print_type"],
     description: "",
   });
 
@@ -178,7 +185,7 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
             <Select
               name="print_type"
               value={formData.print_type}
-              onValueChange={(value: "FDM" | "Resin") => setFormData({ ...formData, print_type: value })}
+              onValueChange={(value: Machine["print_type"]) => setFormData({ ...formData, print_type: value })}
             >
               <SelectTrigger id="print_type" aria-label="Print Type">
                 <SelectValue />
@@ -186,6 +193,8 @@ const MachinesForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Machi
               <SelectContent>
                 <SelectItem value="FDM">FDM</SelectItem>
                 <SelectItem value="Resin">Resin</SelectItem>
+                <SelectItem value="Laser">Laser</SelectItem>
+                <SelectItem value="Embroidery">Embroidery</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -359,7 +368,7 @@ const MachinesList = memo(({ machines, onEdit, onDelete, formatPrice }: Machines
               <TableRow key={machine.id}>
                 <TableCell className="font-medium">{machine.name}</TableCell>
                 <TableCell>
-                  <span className={`px-2 py-1 rounded-full text-xs ${machine.print_type === "FDM" ? "bg-primary/10 text-primary" : "bg-purple-500/10 text-purple-600"}`}>
+                  <span className={`px-2 py-1 rounded-full text-xs ${getMachinePrintTypeBadgeClass(machine.print_type)}`}>
                     {machine.print_type}
                   </span>
                 </TableCell>

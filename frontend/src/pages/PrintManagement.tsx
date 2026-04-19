@@ -5,7 +5,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { DragDropContext, DropResult } from "@hello-pangea/dnd";
 import { Button } from "@/components/ui/button";
 import { useProduction } from "@/hooks/useProduction";
@@ -35,10 +35,20 @@ const PrintManagement = () => {
     const navigate = useNavigate();
     const { machines: fdmMachines } = useCalculatorData({ printType: 'FDM' });
     const { machines: resinMachines } = useCalculatorData({ printType: 'Resin' });
+    const { machines: laserMachines } = useCalculatorData({ printType: 'Laser' });
+    const { machines: embroideryMachines } = useCalculatorData({ printType: 'Embroidery' });
 
     const machines = useMemo(() => {
-        return [...fdmMachines, ...resinMachines];
-    }, [fdmMachines, resinMachines]);
+        return [...fdmMachines, ...resinMachines, ...laserMachines, ...embroideryMachines];
+    }, [fdmMachines, resinMachines, laserMachines, embroideryMachines]);
+
+    const getStoredConnections = useCallback(() => {
+        try {
+            return JSON.parse(localStorage.getItem('printer_connections') || '{}') as Record<string, PrinterConnection>;
+        } catch {
+            return {};
+        }
+    }, []);
 
     // Local Storage for visible machines
     const [visibleMachineIds, setVisibleMachineIds] = useState<string[]>(() => {
@@ -66,7 +76,7 @@ const PrintManagement = () => {
     };
 
     // Printer Connection State
-    const [connections, setConnections] = useState<Record<string, PrinterConnection>>({});
+    const [connections, setConnections] = useState<Record<string, PrinterConnection>>(() => getStoredConnections());
     const [connectDialogMachineId, setConnectDialogMachineId] = useState<string | null>(null);
 
     // Typed state for print job
@@ -133,18 +143,72 @@ const PrintManagement = () => {
         };
     }, [machines]);
 
+    useEffect(() => {
+        localStorage.setItem('printer_connections', JSON.stringify(connections));
+    }, [connections]);
+
     // Initial Connection State Sync
     useEffect(() => {
         if (!window.electronAPI?.printer) return;
 
-        window.electronAPI.printer.getConnectedPrinters().then(printers => {
-            setConnections(prev => {
+        const reconnectStoredPrinters = async () => {
+            const stored = getStoredConnections();
+            const entries = Object.entries(stored);
+
+            if (entries.length === 0) {
+                return;
+            }
+
+            setConnections((prev) => {
                 const next = { ...prev };
-                // Logic to restore connections would go here
+                entries.forEach(([machineId, connection]) => {
+                    next[machineId] = {
+                        ...connection,
+                        status: 'reconnecting',
+                        lastAttemptAt: new Date().toISOString(),
+                    };
+                });
                 return next;
             });
-        });
-    }, []);
+
+            for (const [machineId, connection] of entries) {
+                try {
+                    await window.electronAPI.printer.connect({
+                        ip: connection.cloudMode ? undefined : connection.ip,
+                        accessCode: connection.accessCode || '',
+                        serial: connection.serial,
+                        cloudMode: connection.cloudMode,
+                    });
+
+                    setConnections((prev) => ({
+                        ...prev,
+                        [machineId]: {
+                            ...prev[machineId],
+                            ...connection,
+                            status: 'connected',
+                            lastSeenAt: new Date().toISOString(),
+                            lastReconnectAt: new Date().toISOString(),
+                            reconnectError: undefined,
+                        },
+                    }));
+                } catch (error) {
+                    const reconnectError = error instanceof Error ? error.message : 'Reconnect failed';
+                    setConnections((prev) => ({
+                        ...prev,
+                        [machineId]: {
+                            ...prev[machineId],
+                            ...connection,
+                            status: 'error',
+                            reconnectError,
+                            lastAttemptAt: new Date().toISOString(),
+                        },
+                    }));
+                }
+            }
+        };
+
+        void reconnectStoredPrinters();
+    }, [getStoredConnections]);
 
     const handleConnect = async (details: { ip?: string; accessCode: string; serial: string; cloudMode?: boolean }) => {
         if (!connectDialogMachineId) return;
@@ -156,7 +220,16 @@ const PrintManagement = () => {
                 const connectionKey = details.cloudMode ? `cloud:${details.serial}` : details.ip!;
                 setConnections(prev => ({
                     ...prev,
-                    [connectDialogMachineId]: { status: 'connected', ip: connectionKey, serial: details.serial }
+                    [connectDialogMachineId]: {
+                        status: 'connected',
+                        ip: connectionKey,
+                        serial: details.serial,
+                        accessCode: details.accessCode,
+                        cloudMode: details.cloudMode,
+                        connectionType: details.cloudMode ? 'cloud' : 'lan',
+                        lastSeenAt: new Date().toISOString(),
+                        lastReconnectAt: new Date().toISOString(),
+                    }
                 }));
 
                 // Persistence: Save mapping
@@ -277,15 +350,20 @@ const PrintManagement = () => {
         // Let's check matching logic:
         // Find the machine corresponding to the target ID
         const targetMachine = machines.find(m => m.id === targetMachineId);
-
-        // Check if job matches target machine name (from quote parameters)
-        // Note: quote.parameters.machine is the name
         if (targetMachineId) {
-            const jobMachineName = movedJob.quote.parameters.machine || movedJob.quote.parameters.machineName;
+            const preferredMachineId = movedJob.quote.assignedMachineId || movedJob.quote.parameters.machineId as string | undefined;
 
-            // If job has a specific machine name, and we are dragging to a machine...
-            if (jobMachineName && targetMachine && targetMachine.name !== jobMachineName) {
-                toast.error(`Cannot move job for "${jobMachineName}" to "${targetMachine.name}"`);
+            if (!targetMachine) {
+                return;
+            }
+
+            if (targetMachine.print_type !== movedJob.quote.printType) {
+                toast.error(`Cannot assign a ${movedJob.quote.printType} job to ${targetMachine.name}`);
+                return;
+            }
+
+            if (preferredMachineId && targetMachine.id !== preferredMachineId) {
+                toast.error(`This job is assigned to a different machine and cannot be moved to ${targetMachine.name}`);
                 return;
             }
         }

@@ -1,10 +1,14 @@
 # Quote Calculation System
 
 ## Overview
-The quote system supports two distinct print technologies: **FDM** (filament-based) and **Resin** (SLA/DLP). Both use the same cost structure but different input parameters.
+The quote system supports four fabrication workflows: **FDM** (filament-based), **Resin** (SLA/DLP), **Laser** (cutting/engraving), and **Embroidery**. All four return the same `QuoteData` contract so batch totals, saved quotes, sync, and production flows can reuse one storage model.
 
 **Location:** [src/lib/quoteCalculations.ts](../src/lib/quoteCalculations.ts)  
 **Types:** [src/types/quote.ts](../src/types/quote.ts)
+
+**Phase 2 update:** Ordered `quoteFilaments[]` are now the primary FDM material-cost input for pricing, persistence, sync, and quote reloads. Parser `toolBreakdown[]` remains useful, but it now seeds the editable composition instead of acting as the only multicolor source of truth.
+
+**Phase 3 update:** `calculateLaserQuote()` and `calculateEmbroideryQuote()` now live beside the existing FDM/Resin calculators in [src/lib/quoteCalculations.ts](../src/lib/quoteCalculations.ts). They reuse the same overhead, markup, and quantity multiplier pattern while mapping workflow-specific setup costs into the shared quote cost fields.
 
 ## Cost Breakdown Structure
 
@@ -24,26 +28,61 @@ totalPrice = unitPrice * quantity
 
 ### FDM-Specific Inputs
 - **printTime** (hours) → machineTimeCost
-- **filamentWeight** (grams) → converted to kg → materialCost
-- **toolBreakdown[] material mapping** → primary source for materialCost in multicolor jobs
+- **filamentWeight** (grams) → converted to kg → fallback single-material materialCost when no composition exists
+- **quoteFilaments[]** → primary source for materialCost in multi-material jobs and the persisted segment order used when reopening a quote
+- **toolBreakdown[]** → parser-assisted seed data for `quoteFilaments[]` (model/support/tower/flush totals remain reporting metadata)
 - **material.cost_per_unit** ($/kg) → used per mapped filament material (fallback to selected material when needed)
 - **machine.hourly_cost** ($/hr) → used in machineTimeCost (computed from machine price, usage, lifetime, maintenance)
 - **machine.power_consumption_watts** → electricityCost = printTime × (watts/1000) × electricityRate
 - **recyclableTotals/support/tower/flush** (from parser) → tracked in quote parameters for reporting (non-cost)
 
-In mapped multicolor flow:
+In multi-material flow:
 
 ```
-materialCost = Σ (toolBreakdown[i].totalGrams / 1000) * mappedMaterial[i].cost_per_unit
+materialCost = Σ (quoteFilaments[i].weightGrams / 1000) * mappedMaterial[i].cost_per_unit
 ```
 
-If no per-tool mapping exists, calculation falls back to single-material logic.
+If no ordered segment list exists, calculation falls back to parser `toolBreakdown[]`, then to legacy single-material logic.
 
 ### Resin-Specific Inputs
 - **printTime** (hours)
 - **resinVolume** (ml) → materialCost using material.cost_per_unit ($/ml)
 - **isopropylCost** (flat value)
 - **machine.power_consumption_watts** → electricityCost
+
+### Laser-Specific Inputs
+- **materialSurfaceArea** (cm2) → area-priced materialCost using `material.cost_per_unit`
+- **estimatedCutTime** + **estimatedEngravingTime** (minutes) → machineTimeCost after minutes → hours conversion
+- **laserPower** (watts, optional) → electricityCost fallback before using machine wattage
+- **laborHours** → laborCost using a fixed design/setup rate of `$25/hr`
+- **focusLensReplacement** + **laserTubeAge** → folded into `laborConsumablesCost`
+
+Laser unit-cost flow:
+
+```
+materialCost = materialSurfaceArea * material.cost_per_unit
+machineTimeCost = ((estimatedCutTime + estimatedEngravingTime) / 60) * machine.hourly_cost
+electricityCost = totalTimeHours * (laserPowerWatts / 1000) * electricityRate
+laborCost = laborHours * 25
+laborConsumablesCost = selectedConsumablesTotal + focusLensCost + tubeMaintenanceCost
+```
+
+### Embroidery-Specific Inputs
+- **baseGarmentCost** → included in `materialCost`
+- **threadColors** → threadCost at a flat `$2.50` per color change
+- **selectedBackingId** → backingCost from the chosen embroidery material
+- **estimatedEmbroideryTime** (minutes) → machineTimeCost after minutes → hours conversion
+- **laborHours** → laborCost using a fixed finishing/setup rate of `$20/hr`
+
+Embroidery unit-cost flow:
+
+```
+materialCost = baseGarmentCost + threadCost + backingCost
+machineTimeCost = (estimatedEmbroideryTime / 60) * machine.hourly_cost
+electricityCost = totalTimeHours * (machine.power_consumption_watts / 1000) * electricityRate
+laborCost = laborHours * 20
+laborConsumablesCost = selectedConsumablesTotal
+```
 
 ## Labor Model
 
@@ -120,6 +159,7 @@ batchTotals = {
    const powerConsumptionKw = machine.power_consumption_watts ? machine.power_consumption_watts / 1000 : 0;
    ```
 4. **Labor units validation:** Each labor selection must include a labor item and units > 0.
+5. **Segment order vs total cost:** Reordering `quoteFilaments[]` must not change the material total; order is preserved for traceability and reopening, not for pricing.
 
 ## Testing Calculation Accuracy
 

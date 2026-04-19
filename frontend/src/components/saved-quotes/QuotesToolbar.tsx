@@ -54,6 +54,8 @@ export const QuotesToolbar = ({
                             <SelectItem value="all">All Types</SelectItem>
                             <SelectItem value="FDM">FDM Only</SelectItem>
                             <SelectItem value="Resin">Resin Only</SelectItem>
+                            <SelectItem value="Laser">Laser Only</SelectItem>
+                            <SelectItem value="Embroidery">Embroidery Only</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>

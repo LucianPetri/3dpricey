@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.middleware';
+import { requireObject, requireString, validateBody } from '../middleware/validation.middleware';
 import {
   getQuotes,
   getQuoteById,
@@ -12,7 +13,10 @@ import {
   updateQuote,
   deleteQuote,
   batchCreateQuotes,
+  parseQuoteGcodeController,
 } from '../controllers/quotes.controller';
+import { createLaserQuote } from '../controllers/laser.controller';
+import { createEmbroideryQuote } from '../controllers/embroidery.controller';
 
 const router = express.Router();
 
@@ -22,6 +26,9 @@ router.use(authMiddleware);
 router.get('/', getQuotes);
 router.post('/', createQuote);
 router.post('/batch', batchCreateQuotes);
+router.post('/laser', createLaserQuote);
+router.post('/embroidery', createEmbroideryQuote);
+router.post('/parse-gcode', validateBody([requireObject(), requireString('gcode')]), parseQuoteGcodeController);
 router.get('/:id', getQuoteById);
 router.put('/:id', updateQuote);
 router.delete('/:id', deleteQuote);

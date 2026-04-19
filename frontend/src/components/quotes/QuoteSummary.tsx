@@ -16,8 +16,7 @@ import { useCurrency } from "@/hooks/useCurrency";
 import { printQuotePDF } from "@/lib/pdfGenerator";
 import { useBatchQuote } from "@/hooks/useBatchQuote";
 import { useProduction } from "@/hooks/useProduction";
-import { useCalculatorData } from "@/hooks/useCalculatorData";
-import { getSpools } from "@/lib/core/sessionStorage";
+import { getMachines, getSpools } from "@/lib/core/sessionStorage";
 import { HexColorSwatch } from "@/components/shared/HexColorSwatch";
 import {
   AlertDialog,
@@ -40,11 +39,6 @@ const QuoteSummary = memo(({ quoteData, onSaveQuote }: QuoteSummaryProps) => {
   const { currency, formatPrice } = useCurrency();
   const { addItem, batchItems } = useBatchQuote();
   const { addJob } = useProduction();
-
-  // Fetch machines to resolve ID for auto-assignment
-  // Fetch machines to resolve ID for auto-assignment
-  const { machines: fdmMachines } = useCalculatorData({ printType: 'FDM' });
-  const { machines: resinMachines } = useCalculatorData({ printType: 'Resin' });
 
   const [showLowStockAlert, setShowLowStockAlert] = useState(false);
   const [pendingSave, setPendingSave] = useState(false);
@@ -92,6 +86,41 @@ Generated: ${new Date().toLocaleString()}
   const handleSave = useCallback(() => {
     if (!quoteData) return;
 
+    if ((quoteData.quoteFilaments || []).length > 0) {
+      const shortage = quoteData.quoteFilaments?.find((segment) => {
+        if (!segment.spoolId) {
+          return false;
+        }
+
+        const segmentMaterialId = segment.materialId;
+        if (!segmentMaterialId) {
+          return false;
+        }
+
+        const spool = getSpools(segmentMaterialId).find((item) => item.id === segment.spoolId);
+        if (!spool) {
+          return false;
+        }
+
+        return spool.currentWeight < segment.weightGrams * quoteData.quantity;
+      });
+
+      if (shortage?.spoolId && shortage.materialId) {
+        const spool = getSpools(shortage.materialId).find((item) => item.id === shortage.spoolId);
+        if (spool) {
+          const required = shortage.weightGrams * quoteData.quantity;
+          setStockShortage({
+            name: spool.name,
+            required,
+            available: spool.currentWeight,
+            unit: 'g',
+          });
+          setShowLowStockAlert(true);
+          return;
+        }
+      }
+    }
+
     // Check inventory if spool is selected
     const spoolId = quoteData.parameters?.selectedSpoolId as string;
     const materialId = quoteData.parameters?.materialId as string;
@@ -110,7 +139,7 @@ Generated: ${new Date().toLocaleString()}
             name: spool.name,
             required: totalNeeded,
             available: spool.currentWeight,
-            unit: quoteData.printType === 'Resin' ? 'ml' : 'g'
+            unit: quoteData.printType === 'Resin' ? 'ml' : quoteData.printType === 'FDM' ? 'g' : 'unit'
           });
           setShowLowStockAlert(true);
           return;
@@ -148,12 +177,13 @@ Generated: ${new Date().toLocaleString()}
   const handleSendToProduction = useCallback(() => {
     if (!quoteData) return;
 
-    // Find matching machine ID
-    const allMachines = [...fdmMachines, ...resinMachines];
-    const machineName = quoteData.parameters.machineName || quoteData.parameters.machine; // Handle inconsistent naming if any
-    const matchedMachine = allMachines.find(m => m.name === machineName);
+    const allMachines = getMachines();
+    const preferredMachineId = quoteData.assignedMachineId || quoteData.parameters.machineId as string | undefined;
+    const machineName = quoteData.parameters.machineName || quoteData.parameters.machine;
+    const matchedMachine = preferredMachineId
+      ? allMachines.find((machine) => machine.id === preferredMachineId)
+      : allMachines.find((machine) => machine.name === machineName);
 
-    // Pass machineId if found, otherwise null (unassigned)
     addJob(quoteData, matchedMachine?.id || null);
 
     if (matchedMachine) {
@@ -161,7 +191,7 @@ Generated: ${new Date().toLocaleString()}
     } else {
       toast.success("Job added to Unassigned Queue");
     }
-  }, [quoteData, addJob, fdmMachines, resinMachines]);
+  }, [quoteData, addJob]);
 
   if (!quoteData) {
     return (

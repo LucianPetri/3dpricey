@@ -3,13 +3,20 @@
 **Phase:** Feature Enhancement  
 **Depends On:** Phase 1 (PostgreSQL infrastructure)  
 **Duration:** 2-3 weeks  
-**Status:** Planning  
+**Status:** Implemented  
 
 ---
 
 ## Overview
 
 Currently, 3DPricey treats each print as using a **single filament type**. Phase 2 adds support for prints with **multiple filament colors/materials**.
+
+### Implemented Snapshot
+
+- Ordered `quoteFilaments[]` now persist through the backend quote APIs, sync layer, local storage, and calculator reload flow.
+- [frontend/src/components/calculator/FilamentCompositionForm.tsx](../src/components/calculator/FilamentCompositionForm.tsx) is the active composition editor for FDM multi-material quotes.
+- [backend/src/routes/quotes.routes.ts](../../backend/src/routes/quotes.routes.ts) now exposes `POST /api/quotes/parse-gcode` for normalized parser-assisted composition responses.
+- [frontend/src/pages/Index.tsx](../src/pages/Index.tsx) and [frontend/src/components/quotes/SavedQuotesTable.tsx](../src/components/quotes/SavedQuotesTable.tsx) support reopening a saved FDM quote back into the calculator.
 
 ### Example Use Case
 ```
@@ -38,11 +45,22 @@ model QuoteFilament {
   quoteId   String
   quote     Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   
-  materialId String    // Link to Material (PLA Red, PETG Blue, etc.)
-  weightGrams Float     // How many grams of THIS material
-  order       Int       // 1st, 2nd, 3rd filament in sequence
+  materialId   String
+  material     Material  @relation(fields: [materialId], references: [id])
+  weightGrams  Float
+  order        Int
+  tool         String?
+  color        String?
+  spoolId      String?
+  materialName String?
+  modelGrams   Float?
+  supportGrams Float?
+  towerGrams   Float?
+  flushGrams   Float?
   
   createdAt DateTime  @default(now())
+
+  @@unique([quoteId, order])
 }
 ```
 
@@ -101,18 +119,19 @@ export interface FDMFormData {
 
 ### 2. Database API Endpoints
 
-**POST /api/quotes** (Enhanced)
+**POST /api/quotes** / **PUT /api/quotes/:id** (Enhanced)
 ```json
 Request:
 {
   "projectName": "Dragon Figurine",
   "printType": "FDM",
-  "filaments": [
+  "quoteFilaments": [
     {
       "materialId": "mat_001",
       "order": 1,
       "weightGrams": 150,
-      "costPerUnit": 20
+      "tool": "T0",
+      "spoolId": "spool_001"
     },
     {
       "materialId": "mat_002",
@@ -127,12 +146,26 @@ Request:
 Response:
 {
   "id": "quote_123",
-  "filaments": [
+  "quoteFilaments": [
     { "materialId": "mat_001", "weightGrams": 150, "order": 1 },
     { "materialId": "mat_002", "weightGrams": 75, "order": 2 }
   ],
-  "materialCost": 5.50,  // (150 * 20 + 75 * 20) / 1000
+  "materialCost": 5.50,
   // ...rest of quote...
+}
+```
+
+**POST /api/quotes/parse-gcode**
+
+```json
+Request:
+{ "gcode": "..." }
+
+Response:
+{
+  "colorChanges": [],
+  "toolBreakdown": [],
+  "recyclableTotals": {}
 }
 ```
 

@@ -30,11 +30,18 @@ export const ProductionProvider = ({ children }: { children: ReactNode }) => {
     }, [jobs]);
 
     const addJob = useCallback((quote: QuoteData, machineId: string | null = null) => {
+        const preferredMachineId = machineId
+            ?? quote.assignedMachineId
+            ?? (typeof quote.parameters.machineId === 'string' ? quote.parameters.machineId : null);
+
         const newJob: ProductionJob = {
             id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            quote,
+            quote: {
+                ...quote,
+                assignedMachineId: preferredMachineId || undefined,
+            },
             status: 'queued',
-            machineId,
+            machineId: preferredMachineId,
             priority: 'normal',
             createdAt: new Date().toISOString(),
             order: jobs.length, // Append to end
@@ -62,6 +69,10 @@ export const ProductionProvider = ({ children }: { children: ReactNode }) => {
                 ...jobToMove,
                 status: newStatus,
                 machineId: newMachineId,
+                quote: {
+                    ...jobToMove.quote,
+                    assignedMachineId: newMachineId || undefined,
+                },
             };
 
             // 3. Auto-add to stock when job moves to 'completed' status

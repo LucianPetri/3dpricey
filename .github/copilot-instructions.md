@@ -95,13 +95,15 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 ### Key Subsystems
 
 **1. Quote System** ([src/types/quote.ts](src/types/quote.ts), [src/lib/quoteCalculations.ts](src/lib/quoteCalculations.ts))
-- Dual calculators: FDM (filament-based) and Resin (SLA/DLP)
+- Four calculators: FDM (filament-based), Resin (SLA/DLP), Laser (cutting/engraving), and Embroidery
 - Cost breakdown: material + machine time + electricity + labor + consumables + overhead + markup
 - Supports batch quoting via [BatchQuoteContext](src/contexts/BatchQuoteContext.ts)
 
 **2. File Parsers** ([src/lib/parsers/](src/lib/parsers/))
 - G-code parser: Extracts print time/filament weight from `.gcode` and `.3mf` files using regex patterns
 - Resin parser: Parses `.cxdlpv4` files (ZIP-based) for volume/time data
+- SVG parser: Extracts width/height, vector count, and material area for laser quotes
+- Embroidery parser: Parses `.pes` files for design size and stitch-derived runtime
 - Supports thumbnails embedded in G-code and 3MF files
 
 **3. State Management**
@@ -109,12 +111,18 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 - **Custom hooks** wrap contexts for consuming components (e.g., `useBatchQuote()`, `useProduction()`)
 - **No Redux/Zustand** – intentionally minimal for startup performance
 
-**4. Data Persistence** ([src/lib/core/sessionStorage.ts](src/lib/core/sessionStorage.ts))
+**4. Offline Sync System** ([frontend/src/lib/sync.ts](../frontend/src/lib/sync.ts), [frontend/src/hooks/useSyncStatus.ts](../frontend/src/hooks/useSyncStatus.ts), [backend/src/services/sync.service.ts](../backend/src/services/sync.service.ts))
+- Client keeps `session_quotes` as the immediate local source of truth and queues backend mutations in `pending_sync_changes`
+- `SyncService` retries on `window.online` and on a 5 minute timer, collapsing repeated quote changes before posting to `/api/sync`
+- Conflicts are persisted in `pending_sync_conflicts` and resolved through the app-level `ConflictResolutionModal`
+- Backend sync writes `SyncTransaction` rows for applied/conflicted changes and compares `baseVersion` against `quote.updatedAt` for conflict detection
+
+**5. Data Persistence** ([src/lib/core/sessionStorage.ts](src/lib/core/sessionStorage.ts))
 - Wraps `localStorage` with type-safe getters/setters
 - Auto-initializes with default materials, machines, cost constants
-- Storage keys: `QUOTES`, `MATERIALS`, `MACHINES`, `CUSTOMERS`, `SPOOLS`, `GCODES`, `CONSTANTS`, `STOCK`, etc.
+- Storage keys: `session_quotes`, `session_materials`, `session_machines`, `session_customers`, `session_spools`, `session_gcodes`, `session_constants`, `session_stock`, `pending_sync_changes`, `pending_sync_conflicts`, etc.
 
-**5. Stock Management System** ([src/lib/core/sessionStorage.ts](src/lib/core/sessionStorage.ts), [src/hooks/useStock.ts](src/hooks/useStock.ts), [src/pages/StockManagement.tsx](src/pages/StockManagement.tsx))
+**6. Stock Management System** ([src/lib/core/sessionStorage.ts](src/lib/core/sessionStorage.ts), [src/hooks/useStock.ts](src/hooks/useStock.ts), [src/pages/StockManagement.tsx](src/pages/StockManagement.tsx))
 - Tracks inventory from completed print jobs (auto-creates StockItem when ProductionJob reaches 'completed' status)
 - Types: `StockItem` (id, quoteId, projectName, quantity, unitPrice, totalCost, material, color, etc.)
 - Statuses: IN_STOCK, SOLD, RESERVED
@@ -122,7 +130,7 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 - Storage key: `STOCK` (array of StockItem objects in localStorage)
 - Integration: [ProductionProvider.tsx](src/contexts/ProductionProvider.tsx) auto-triggers `addToStock()` on job completion
 
-**5. Backend & Deployment**
+**7. Backend & Deployment**
 - **Backend:** Express + Prisma in [backend/](../backend/)
 - **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml) (local dev) and [deploy/docker-compose.deploy.yml](../deploy/docker-compose.deploy.yml) (deploy/dev with local frontend/backend builds)
 - **CI/CD:** GitLab pipeline with 2 stages: validate (lint frontend) + deploy (SSH to servers)
@@ -153,7 +161,7 @@ GitLab Runner (Alpine)
       --compose--> Services (postgres, redis, minio, backend, frontend, newt)
 ```
 
-**5. Pages & Routing** ([src/pages/](src/pages/), [HashRouter](src/App.tsx))
+**8. Pages & Routing** ([src/pages/](src/pages/), [HashRouter](src/App.tsx))
 - **Index.tsx:** Quote calculator dashboard with left sidebar navigation
 - **PrintManagement.tsx:** Kanban board for production workflow
 - **SavedQuotes.tsx:** Quote history + export
@@ -194,6 +202,11 @@ User uploads .gcode/.3mf/.cxdlpv4
   → gcodeParser.ts extracts: printTime, filamentWeight, thumbnail
   → Form fields auto-populated
   → parseGcode() supports Cura/PrusaSlicer/Simplify3D comment formats
+
+User uploads .svg/.pes
+  → LaserCalculatorTable / EmbroideryCalculatorTable parser helpers run locally
+  → SVG parser extracts size + area; PES parser extracts stitch count + bounds
+  → Form fields auto-populate and drafts persist through refresh
 ```
 
 **3. Data Storage Example**
@@ -247,9 +260,10 @@ const { savedQuotes } = useSavedQuotes(); // Hook fetches + returns typed data
 
 ## Testing & Validation
 
-- **No unit tests configured** (add as needed)
+- **Backend automated tests configured** with Jest + Supertest in [backend/tests/](../backend/tests/)
+- **Current sync regression coverage:** [backend/tests/contract/sync.contract.test.ts](../backend/tests/contract/sync.contract.test.ts) and [backend/tests/integration/sync-conflicts.integration.test.ts](../backend/tests/integration/sync-conflicts.integration.test.ts)
 - **Manual testing:** Verify G-code parsing across Cura, PrusaSlicer, Simplify3D files
-- **Browser DevTools:** Check `localStorage` for: `APP::quotes`, `APP::materials`, etc.
+- **Browser DevTools:** Check `localStorage` for: `session_quotes`, `session_materials`, `pending_sync_changes`, `pending_sync_conflicts`, etc.
 - **ESLint:** Run `npm run lint` before commits (AGPL header required on new files)
 
 ---

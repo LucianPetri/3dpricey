@@ -39,7 +39,7 @@ interface PrintJobDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     job: PrintJobData | null;
-    machines: { id: string; name: string; }[];
+    machines: Machine[];
     connections: Record<string, PrinterConnection>;
     onSend: (machineId: string, fileOrPath: File | string, options: PrintOptions) => Promise<void>;
 }
@@ -64,11 +64,30 @@ export function PrintJobDialog({
     });
 
     // Filter only connected machines
-    const connectedMachines = machines.filter(
-        (m) =>
-            connections[m.id]?.status === "connected"
-        // connections uses machine.id as key in parent (PrintManagement.tsx)
-    );
+    const preferredMachineId = job?.quote.assignedMachineId || job?.quote.parameters.machineId as string | undefined;
+    const connectedMachines = machines.filter((machine) => {
+        if (connections[machine.id]?.status !== "connected") {
+            return false;
+        }
+
+        if (machine.print_type !== job.quote.printType) {
+            return false;
+        }
+
+        if (preferredMachineId && preferredMachineId !== machine.id) {
+            return false;
+        }
+
+        return true;
+    });
+
+    const jobMetric = job.quote.printType === "Laser"
+        ? `${job.quote.parameters.materialSurfaceArea || "0"} cm2`
+        : job.quote.printType === "Embroidery"
+            ? `${job.quote.parameters.stitchCount || "0"} stitches`
+            : job.quote.printType === "Resin"
+                ? `${job.quote.parameters.resinVolume || "0"} ml`
+                : `${job.quote.parameters.filamentWeight || "0"} g`;
 
     const handleSend = async () => {
         if (!selectedMachineId) {
@@ -123,11 +142,11 @@ export function PrintJobDialog({
                     <div className="flex justify-center gap-12 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                             <Timer className="w-4 h-4" />
-                            <span>{job.quote?.parameters?.printTime || "0h 0m"}</span>
+                            <span>{job.quote?.parameters?.printTime || job.quote?.parameters?.estimatedCutTime || job.quote?.parameters?.estimatedEmbroideryTime || "0"}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <Weight className="w-4 h-4" />
-                            <span>{job.quote?.parameters?.filamentWeight || "0"} g</span>
+                            <span>{jobMetric}</span>
                         </div>
                     </div>
 
@@ -144,7 +163,7 @@ export function PrintJobDialog({
                             </SelectTrigger>
                             <SelectContent>
                                 {connectedMachines.length === 0 ? (
-                                    <SelectItem value="none" disabled>No printers connected</SelectItem>
+                                    <SelectItem value="none" disabled>No compatible printers connected</SelectItem>
                                 ) : (
                                     connectedMachines.map((m) => (
                                         <SelectItem key={m.id} value={m.id}>

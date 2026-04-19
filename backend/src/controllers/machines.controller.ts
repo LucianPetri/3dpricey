@@ -4,10 +4,57 @@
  */
 
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { AppError } from '../middleware/errorHandler.middleware';
+import { prisma } from '../lib/prisma';
 
-const prisma = new PrismaClient();
+type ConnectionStore = {
+  findUnique(args: Record<string, unknown>): Promise<Record<string, any> | null>;
+  upsert(args: Record<string, unknown>): Promise<Record<string, any>>;
+  update(args: Record<string, unknown>): Promise<Record<string, any>>;
+};
+
+function getConnectionStore() {
+  const store = (prisma as unknown as Record<string, unknown>).printerConnectionState;
+  if (!store || typeof store !== 'object') {
+    throw new AppError(500, 'Printer connection state model is unavailable');
+  }
+
+  return store as ConnectionStore;
+}
+
+async function getMachineForUser(userId: string | undefined, machineId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { companyId: true },
+  });
+
+  if (!user?.companyId) {
+    throw new AppError(400, 'User must belong to a company');
+  }
+
+  const machine = await prisma.machine.findFirst({
+    where: {
+      id: machineId,
+      companyId: user.companyId,
+    },
+  });
+
+  if (!machine) {
+    throw new AppError(404, 'Machine not found');
+  }
+
+  return machine;
+}
+
+function handleMachineControllerError(res: Response, error: unknown, action: string) {
+  if (error instanceof AppError) {
+    return res.status(error.statusCode).json({ error: error.message, details: error.details });
+  }
+
+  console.error(`${action} machine error:`, error);
+  return res.status(500).json({ error: `Failed to ${action} machine` });
+}
 
 export async function getMachines(req: Request, res: Response) {
   try {
@@ -97,5 +144,85 @@ export async function deleteMachine(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Delete machine error:', error);
     res.status(500).json({ error: 'Failed to delete machine' });
+  }
+}
+
+export async function reconnectMachine(req: Request, res: Response) {
+  try {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    const { status, connectionType, reconnectError } = req.body as {
+      status: string;
+      connectionType: string;
+      reconnectError?: string | null;
+    };
+
+    await getMachineForUser(userId, id);
+
+    const now = new Date();
+    const connection = await getConnectionStore().upsert({
+      where: { machineId: id },
+      create: {
+        machineId: id,
+        status,
+        connectionType,
+        reconnectError: reconnectError ?? null,
+        lastSeenAt: now,
+        lastReconnectAt: now,
+      },
+      update: {
+        status,
+        connectionType,
+        reconnectError: reconnectError ?? null,
+        lastSeenAt: now,
+        lastReconnectAt: now,
+      },
+    });
+
+    res.json({ connection });
+  } catch (error: unknown) {
+    return handleMachineControllerError(res, error, 'reconnect');
+  }
+}
+
+export async function assignMachineJob(req: Request, res: Response) {
+  try {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    const { jobId, printType } = req.body as { jobId: string; printType: string };
+
+    const machine = await getMachineForUser(userId, id);
+    const connectionStore = getConnectionStore();
+    const currentConnection = await connectionStore.findUnique({
+      where: { machineId: id },
+    });
+
+    if (!currentConnection || currentConnection.status !== 'connected') {
+      throw new AppError(409, 'Machine is unavailable for assignment');
+    }
+
+    if (machine.printType !== printType) {
+      throw new AppError(409, `Machine is incompatible with ${printType} jobs`);
+    }
+
+    const assignment = await connectionStore.update({
+      where: { machineId: id },
+      data: {
+        assignedJobId: jobId,
+        lastSeenAt: new Date(),
+      },
+    });
+
+    res.json({
+      assignment: {
+        machineId: id,
+        jobId,
+        status: assignment.status,
+        connectionType: assignment.connectionType,
+        assignedJobId: assignment.assignedJobId,
+      },
+    });
+  } catch (error: unknown) {
+    return handleMachineControllerError(res, error, 'assign');
   }
 }

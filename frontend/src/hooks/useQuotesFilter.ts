@@ -6,10 +6,10 @@
  */
 
 import { useState, useMemo } from "react";
-import { QuoteData } from "@/types/quote";
+import { QuoteData, PrintType } from "@/types/quote";
 
 export type SortOrder = "newest" | "oldest" | "price-high" | "price-low";
-export type FilterType = "all" | "FDM" | "Resin";
+export type FilterType = "all" | PrintType;
 
 export const useQuotesFilter = (quotes: QuoteData[]) => {
     const [searchQuery, setSearchQuery] = useState("");

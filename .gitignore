@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 dist-electron
+build
+coverage
 test-assets
 *.local
 

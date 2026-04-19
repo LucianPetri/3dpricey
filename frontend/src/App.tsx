@@ -5,8 +5,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Suspense, lazy } from "react";
-import { ShieldCheck } from "lucide-react";
+import { Suspense, lazy, useCallback, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,6 +15,8 @@ import { BatchQuoteProvider } from "@/contexts/BatchQuoteProvider";
 import { ProductionProvider } from "@/contexts/ProductionProvider";
 import { CurrencyProvider } from "@/components/shared/CurrencyProvider";
 import { ThemeProvider } from "@/contexts/ThemeProvider";
+import { ConflictResolutionModal } from "@/components/shared/ConflictResolutionModal";
+import { useSyncStatus } from "@/hooks/useSyncStatus";
 import OrderManagement from "./pages/OrderManagement";
 import Layout from "./components/layout/Layout";
 
@@ -69,6 +70,24 @@ const queryClient = new QueryClient({
 const App = () => {
   // Enable UI protection (disable context menu, F12, etc.)
   // useAppProtection();
+  const { conflicts, conflictModalOpen, closeConflictResolver, resolveConflict } = useSyncStatus();
+  const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
+
+  const handleResolveConflicts = useCallback(async (selections: Record<string, 'local' | 'server'>) => {
+    if (conflicts.length === 0) {
+      return;
+    }
+
+    setIsResolvingConflicts(true);
+
+    try {
+      for (const conflict of conflicts) {
+        await resolveConflict(conflict.transactionId, selections);
+      }
+    } finally {
+      setIsResolvingConflicts(false);
+    }
+  }, [conflicts, resolveConflict]);
 
   return (
     <ThemeProvider>
@@ -94,6 +113,13 @@ const App = () => {
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>
+                  <ConflictResolutionModal
+                    conflicts={conflicts}
+                    isOpen={conflictModalOpen && conflicts.length > 0}
+                    onResolve={handleResolveConflicts}
+                    onCancel={closeConflictResolver}
+                    isResolving={isResolvingConflicts}
+                  />
                 </HashRouter>
               </ProductionProvider>
             </BatchQuoteProvider>

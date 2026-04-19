@@ -17,11 +17,27 @@ export interface BambuDevice {
     id: string; // Ensure id is present or mapped
 }
 
+export type PrinterConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+
+export interface PrinterReconnectState {
+    machineId: string;
+    lastAttemptAt?: string;
+    lastSuccessfulReconnectAt?: string;
+    errorMessage?: string;
+}
+
 export interface PrinterConnection {
     ip: string;
     serial: string;
-    status: string;
+    status: PrinterConnectionStatus | string;
     cloudMode?: boolean;
+    accessCode?: string;
+    connectionType?: 'lan' | 'cloud';
+    lastAttemptAt?: string;
+    lastSeenAt?: string;
+    lastReconnectAt?: string;
+    reconnectError?: string;
+    assignedJobId?: string;
     // Runtime status fields
     printState?: string;
     progress?: number;

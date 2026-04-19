@@ -4,7 +4,7 @@
 
 3DPricey uses **Context API + custom hooks** for global state. This approach trades complexity for simplicity—no Redux/Zustand overhead.
 
-**Key Principle:** Context stores data, hooks + localStorage persist it.
+**Key Principle:** Context stores data, hooks + localStorage persist it, and `SyncService` coordinates queued backend sync work.
 
 ## Context Hierarchy
 
@@ -90,6 +90,8 @@ interface ProductionContextType {
 
 **Hook:** `useProduction()`  
 **Persistence:** Via `sessionStorage.saveJobs()` → localStorage storage key `JOBS`
+
+**Phase 3 update:** `ProductionProvider` now treats `quote.assignedMachineId` and `quote.parameters.machineId` as the preferred production target when a job is created or moved. This lets laser and embroidery quotes keep their machine affinity when entering the queue.
 
 ### 3. KanbanContext
 **File:** [src/contexts/KanbanContext.ts](../src/contexts/KanbanContext.ts)  
@@ -192,34 +194,48 @@ All contexts are consumed via custom hooks that:
 4. Provide derived state
 
 ### Hook Example: useSavedQuotes
-**File:** [src/hooks/useSavedQuotes.ts](../src/hooks/useSavedQuotes.ts)
+**File:** [frontend/src/hooks/useSavedQuotes.ts](../frontend/src/hooks/useSavedQuotes.ts)
 
 ```typescript
 export const useSavedQuotes = () => {
-  const [savedQuotes, setSavedQuotes] = useState<QuoteData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [quotes, setQuotes] = useState<QuoteData[]>([]);
 
   useEffect(() => {
-    // Read from sessionStorage on mount
-    const quotes = sessionStore.getSavedQuotes();
-    setSavedQuotes(quotes);
-    setIsLoading(false);
+    fetchQuotes();
   }, []);
 
-  const saveQuote = (quote: QuoteData) => {
-    const updated = [...savedQuotes, quote];
-    setSavedQuotes(updated);
-    sessionStore.saveQuotes(updated); // Persist
+  useEffect(() => syncService.subscribe(() => {
+    setQuotes(sessionStore.getQuotes());
+  }), []);
+
+  const saveQuote = async (quote: QuoteData) => {
+    const localQuote = sessionStore.saveQuote(quote);
+    syncService.queueQuoteCreate(localQuote);
+    setQuotes((previous) => [localQuote, ...previous]);
   };
 
-  return { savedQuotes, saveQuote, isLoading };
+  return { quotes, saveQuote };
 };
 ```
 
 **Key Pattern:**
 - Hook maintains local state
-- Auto-syncs with localStorage on change
+- Persists immediately to localStorage
+- Subscribes to `SyncService` so background sync updates and conflicts rehydrate the same quote list
 - Returns typed interface for safe access
+
+### Sync Service & Status Hook
+
+**Files:** [frontend/src/lib/sync.ts](../frontend/src/lib/sync.ts), [frontend/src/hooks/useSyncStatus.ts](../frontend/src/hooks/useSyncStatus.ts)
+
+`SyncService` is the app-wide coordinator for offline quote mutations:
+
+- Stores pending backend mutations in `pending_sync_changes`
+- Stores unresolved conflicts in `pending_sync_conflicts`
+- Tracks `pendingCount`, `conflicts`, `lastSyncedAt`, online/authenticated state, and modal visibility
+- Starts a 5 minute background sync interval and retries immediately on `window.online`
+- Collapses repeated quote changes (`create -> update`, `update -> delete`) before sending them to the backend
+- Applies successful server quotes back through `sessionStorage.replaceQuoteFromRemote()` so the UI stays on one source of truth
 
 **Current derived stats include:**
 - `totalQuotes`
@@ -227,30 +243,40 @@ export const useSavedQuotes = () => {
 - `averageQuote`
 - `fdmCount`
 - `resinCount`
+- `laserCount`
+- `embroideryCount`
 - `totalProfit` (sum of quote `markup` across saved quotes)
+
+## Phase 3 Printer Reconnect State
+
+- [PrintManagement.tsx](../src/pages/PrintManagement.tsx) now persists `printer_connections` in localStorage.
+- On page load, stored cloud/LAN connections are marked `reconnecting` and a reconnect attempt is issued through Electron before the machine columns render their final state.
+- Drag/drop and [PrintJobDialog.tsx](../src/components/print-management/PrintJobDialog.tsx) now enforce `machine.print_type === quote.printType` and respect a quote's preferred `machineId` when one exists.
 
 ## SessionStorage Module
 
 **File:** [src/lib/core/sessionStorage.ts](../src/lib/core/sessionStorage.ts)  
 **Purpose:** Centralized localStorage API
 
-**Storage Keys (prefixed with APP::):**
+**Storage Keys (current runtime keys):**
 ```
-APP::QUOTES              → QuoteData[]
-APP::MATERIALS           → Material[]
-APP::MACHINES            → Machine[]
-APP::CUSTOMERS           → Customer[]
-APP::EMPLOYEES           → Employee[]
-APP::LABOR_ITEMS         → LaborItem[]
-APP::SPOOLS              → MaterialSpool[]
-APP::GCODES              → GcodeData[]
-APP::FDM_CALC_DRAFT      → { formData, selectedSpoolId }
-APP::RESIN_CALC_DRAFT    → { formData, selectedSpoolId }
-APP::CONSTANTS           → CostConstant[]
-APP::JOBS                → Job[]
-APP::CURRENCY            → string
-APP::COMPANY             → CompanySettings | null
-APP::INITIALIZED         → "true" (flag)
+session_quotes                 → QuoteData[]
+session_materials              → Material[]
+session_machines               → Machine[]
+session_customers              → Customer[]
+session_employees              → Employee[]
+session_labor_items            → LaborItem[]
+session_spools                 → MaterialSpool[]
+session_gcodes                 → StoredGcode[]
+session_fdm_calc_draft         → { formData, selectedSpoolId }
+session_resin_calc_draft       → { formData, selectedSpoolId }
+session_constants              → CostConstant[]
+session_stock                  → StockItem[]
+session_company                → CompanySettings | null
+session_initialized            → "true" (flag)
+pending_sync_changes           → SyncChangeDto[]
+pending_sync_conflicts         → QuoteSyncConflict[]
+pending_sync_last_synced_at    → ISO date string
 ```
 
 ### Getter Pattern (Type-Safe)
@@ -307,9 +333,13 @@ SavedQuotes page loads
   ↓
 useSavedQuotes() hook
   ↓
-Reads from sessionStorage.getSavedQuotes()
+Reads from sessionStorage.getQuotes()
+  ↓
+Subscribes to SyncService for queue/conflict updates
   ↓
 SavedQuotesTable renders quote list
+  ↓
+SyncStatusBanner reflects pending sync state
   ↓
 User clicks quote
   ↓

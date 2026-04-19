@@ -35,6 +35,25 @@ import { Material } from "@/types/quote";
 import * as sessionStore from "@/lib/core/sessionStorage";
 import { MaterialInventory } from "./MaterialInventory";
 
+const getPrintTypeBadgeClass = (printType: Material["print_type"]) => {
+  if (printType === "FDM") return "bg-primary/10 text-primary";
+  if (printType === "Resin") return "bg-purple-500/10 text-purple-600";
+  if (printType === "Laser") return "bg-amber-500/10 text-amber-600";
+  return "bg-rose-500/10 text-rose-600";
+};
+
+const formatInventoryLevel = (material: Material, value: number) => {
+  if (material.print_type === "FDM") {
+    return value >= 1000 ? `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}kg` : `${value.toFixed(0)}g`;
+  }
+
+  if (material.print_type === "Resin") {
+    return value >= 1000 ? `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}L` : `${value.toFixed(0)}ml`;
+  }
+
+  return `${value.toFixed(value % 1 === 0 ? 0 : 2)} ${material.unit}`;
+};
+
 // --- Materials Form Component ---
 interface MaterialsFormProps {
   initialData?: Material | null;
@@ -48,7 +67,7 @@ const MaterialsForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Mate
     name: "",
     cost_per_unit: "",
     unit: "kg",
-    print_type: "FDM" as "FDM" | "Resin",
+    print_type: "FDM" as Material["print_type"],
     description: "",
   });
 
@@ -110,7 +129,7 @@ const MaterialsForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Mate
             <Select
               name="print_type"
               value={formData.print_type}
-              onValueChange={(value: "FDM" | "Resin") => setFormData({ ...formData, print_type: value })}
+              onValueChange={(value: Material["print_type"]) => setFormData({ ...formData, print_type: value })}
             >
               <SelectTrigger id="print_type" aria-label="Print Type">
                 <SelectValue />
@@ -118,6 +137,8 @@ const MaterialsForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Mate
               <SelectContent>
                 <SelectItem value="FDM">FDM</SelectItem>
                 <SelectItem value="Resin">Resin</SelectItem>
+                <SelectItem value="Laser">Laser</SelectItem>
+                <SelectItem value="Embroidery">Embroidery</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -154,6 +175,9 @@ const MaterialsForm = ({ initialData, onSubmit, onCancel, currencySymbol }: Mate
                 <SelectItem value="liter">Liter (L)</SelectItem>
                 <SelectItem value="g">Gram (g)</SelectItem>
                 <SelectItem value="ml">Milliliter (ml)</SelectItem>
+                <SelectItem value="cm2">Square centimeter (cm2)</SelectItem>
+                <SelectItem value="sheet">Sheet</SelectItem>
+                <SelectItem value="unit">Unit</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -213,15 +237,6 @@ const MaterialsList = memo(({ materials, onEdit, onDelete, formatPrice }: Materi
               const isLow = material.lowStockThreshold ? stock < material.lowStockThreshold : stock < 200;
               const isExpanded = expandedId === material.id;
 
-              // Format weight: show kg when >= 1000g for FDM, L when >= 1000ml for Resin
-              const formatStock = (value: number) => {
-                if (material.print_type === "FDM") {
-                  return value >= 1000 ? `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}kg` : `${value.toFixed(0)}g`;
-                } else {
-                  return value >= 1000 ? `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}L` : `${value.toFixed(0)}ml`;
-                }
-              };
-
               return (
                 <React.Fragment key={material.id}>
                   <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(material.id)}>
@@ -232,7 +247,7 @@ const MaterialsList = memo(({ materials, onEdit, onDelete, formatPrice }: Materi
                     </TableCell>
                     <TableCell className="font-medium">{material.name}</TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs ${material.print_type === "FDM" ? "bg-primary/10 text-primary" : "bg-purple-500/10 text-purple-600"}`}>
+                      <span className={`px-2 py-1 rounded-full text-xs ${getPrintTypeBadgeClass(material.print_type)}`}>
                         {material.print_type}
                       </span>
                     </TableCell>
@@ -241,7 +256,7 @@ const MaterialsList = memo(({ materials, onEdit, onDelete, formatPrice }: Materi
                       <div className="flex items-center gap-2">
                         <Package className="w-4 h-4 text-muted-foreground" />
                         <span className={isLow ? "text-destructive font-medium" : ""}>
-                          {formatStock(stock)}
+                          {formatInventoryLevel(material, stock)}
                         </span>
                         {isLow && <span className="text-xs text-destructive">Low</span>}
                       </div>

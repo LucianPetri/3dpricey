@@ -2,7 +2,7 @@
 
 **Phase:** Infrastructure & Data Persistence  
 **Duration:** 4-6 weeks  
-**Status:** Planning  
+**Status:** In Progress - sync MVP implemented and validated on 2026-03-31  
 
 ---
 
@@ -610,45 +610,62 @@ Request:
 {
   "changes": [
     {
-      "tableName": "quotes",
-      "operation": "UPDATE",
       "id": "quote_123",
-      "localVersion": { "name": "John Quote", "totalPrice": 1500 },
-      "timestamp": "2026-02-20T10:00:00Z"
-    },
-    {
-      "tableName": "quotes",
-      "operation": "CREATE",
-      "localId": "temp_456",
-      "localVersion": { "name": "New Quote", "totalPrice": 2000 },
-      "timestamp": "2026-02-20T10:05:00Z"
+      "type": "update",
+      "resource": "quote",
+      "data": { "notes": "Local note edit" },
+      "timestamp": 1774951500000,
+      "baseVersion": "2026-03-31T11:45:00.000Z"
     }
   ]
 }
 
-Response (200 - No conflicts):
+Response (200):
 {
-  "status": "synced",
-  "synced": 2,
-  "applied": [
-    { "localId": "quote_123", "serverId": "quote_123" },
-    { "localId": "temp_456", "serverId": "quote_999" }
+  "applied": 1,
+  "appliedChanges": ["quote_123"],
+  "records": [
+    {
+      "changeId": "quote_123",
+      "resourceType": "quote",
+      "record": {
+        "id": "quote_123",
+        "projectName": "Bracket",
+        "notes": "Local note edit",
+        "updatedAt": "2026-03-31T12:00:00.000Z"
+      }
+    }
   ]
+  "conflicts": [],
+  "failed": [],
+  "lastSyncedAt": "2026-03-31T12:00:00.000Z"
 }
 
-Response (409 - Conflict detected):
+Response (200 - Conflict returned in batch result):
 {
-  "status": "conflict",
+  "applied": 0,
+  "appliedChanges": [],
+  "records": [],
   "conflicts": [
     {
-      "id": "quote_123",
-      "field": "totalPrice",
-      "localValue": 1500,
-      "serverValue": 1600,
-      "serverUpdatedBy": "another_user@example.com",
-      "serverUpdatedAt": "2026-02-20T09:50:00Z"
+      "id": "txn_123",
+      "changeId": "quote_123",
+      "transactionId": "txn_123",
+      "resourceType": "quote",
+      "resourceId": "quote_123",
+      "fields": [
+        {
+          "field": "notes",
+          "localValue": "Local note edit",
+          "serverValue": "Server note edit"
+        }
+      ],
+      "localVersion": { "notes": "Local note edit" },
+      "serverVersion": { "id": "quote_123", "notes": "Server note edit" }
     }
-  ]
+  ],
+  "failed": [],
+  "lastSyncedAt": "2026-03-31T12:00:00.000Z"
 }
 ```
 
@@ -656,20 +673,23 @@ Response (409 - Conflict detected):
 ```json
 Request:
 {
-  "resolutions": [
-    {
-      "id": "quote_123",
-      "field": "totalPrice",
-      "chosenValue": 1600,  // Server value
-      "chosenVersion": "server"
-    }
-  ]
+  "transactionId": "txn_123",
+  "resolution": "merged",
+  "mergedValue": {
+    "notes": "Use local note but keep server totals"
+  }
 }
 
 Response (200):
 {
-  "status": "resolved",
-  "updated": 1
+  "transaction": {
+    "id": "txn_123",
+    "status": "RESOLVED"
+  },
+  "quote": {
+    "id": "quote_123",
+    "notes": "Use local note but keep server totals"
+  }
 }
 ```
 
@@ -677,12 +697,20 @@ Response (200):
 ```
 Response:
 {
-  "pending": 3,
-  "lastSyncAt": "2026-02-20T10:15:00Z",
-  "nextSyncIn": "4 minutes",
-  "offline": false
+  "pendingCount": 0,
+  "conflictedCount": 1,
+  "lastSyncedAt": "2026-03-31T12:00:00.000Z"
 }
 ```
+
+### Implemented Frontend Sync Keys
+
+The browser now persists sync state alongside quote data:
+
+- `session_quotes` – normalized `QuoteData[]`
+- `pending_sync_changes` – queued quote mutations awaiting `/api/sync`
+- `pending_sync_conflicts` – unresolved conflict payloads shown by `ConflictResolutionModal`
+- `pending_sync_last_synced_at` – most recent successful sync timestamp
 
 ### Material/Machine Endpoints
 

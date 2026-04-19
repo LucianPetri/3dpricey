@@ -64,10 +64,20 @@ const FDMForm = () => {
 - `defaultValues` from props or hooks
 - `onSubmit` should calculate quotes and add to batch
 - Calculator forms auto-save drafts to localStorage and expose a Reset Quote button
-- FDM no longer relies on top-level material/color selection; material mapping happens per detected filament row from parsed G-code.
+- FDM no longer relies on a single top-level material selection; ordered `quoteFilaments[]` are edited directly and parser tool rows only seed the composition.
 - Calculator field rows now render as compact card blocks (`FormFieldRow`) to improve density and readability.
 - `QuoteCalculator` now uses a wrapped multi-column field container (`xl` two-column flow) instead of single vertical rows.
 - Complex sections must opt into full-width using `className="calculator-full-span"` (e.g., consumables, labor tasks, large breakdown tables).
+- Phase 3 calculators follow the same `QuoteCalculator` shell: [LaserCalculatorTable.tsx](../src/components/calculator/LaserCalculatorTable.tsx) uses SVG import + area/runtime fields, while [EmbroideryCalculatorTable.tsx](../src/components/calculator/EmbroideryCalculatorTable.tsx) uses PES import + stitch/backing fields.
+
+### Filament Composition Editor
+
+**Component:** [src/components/calculator/FilamentCompositionForm.tsx](../src/components/calculator/FilamentCompositionForm.tsx)
+
+- Renders a read-only detected G-code breakdown plus the editable ordered segment list used for pricing and persistence.
+- Supports manual segment creation, reordering, spool mapping, and per-segment material assignment.
+- Preserves `tool` links for parsed segments so a reopened quote can sync edited material/spool choices back into `toolBreakdown[]` and `colorUsages[]`.
+- Lives inside [src/components/calculator/FDMCalculatorTable.tsx](../src/components/calculator/FDMCalculatorTable.tsx) and should be treated as the source of truth for multi-material FDM composition state.
 
 ### 2. Upload Components
 
@@ -205,6 +215,7 @@ export const SavedQuotesTable = ({ quotes, onEdit, onDelete }: SavedQuotesTableP
 - Callback functions for actions (edit, delete, export)
 - Use unique `key` (quote.id)
 - Use Shadcn `Table` components
+- Dashboard tables can expose a reopen/edit action that loads a saved quote back into the calculator, not just notes/detail dialogs.
 
 ### Quote Summary Header
 
@@ -227,7 +238,18 @@ The main calculation page uses a **modern left sidebar navigation design** with 
   - Border and accents: Emerald (`emerald-900/30`) and cyan
   - Organized navigation sections: Calculator, Management, Settings
   - Sticky footer with currency, theme toggle, and reset button
-  - FDM/Resin tab buttons toggle calculator type in-place
+  - FDM, Resin, Laser, and Embroidery tab buttons toggle calculator mode in-place
+
+### Phase 3 Calculator Components
+
+- [LaserCalculatorTable.tsx](../src/components/calculator/LaserCalculatorTable.tsx)
+  - Imports SVG metadata through [svgParser.ts](../src/lib/parsers/svgParser.ts)
+  - Collects area-priced material data, cut/engrave time, setup labor, and maintenance toggles
+  - Persists a dedicated `session_laser_calc_draft`
+- [EmbroideryCalculatorTable.tsx](../src/components/calculator/EmbroideryCalculatorTable.tsx)
+  - Imports PES metadata through [embroideryFileParser.ts](../src/lib/parsers/embroideryFileParser.ts)
+  - Collects backing material, stitch count, garment cost, color changes, and finishing labor
+  - Persists a dedicated `session_embroidery_calc_draft`
 
 - **Main Content Area** (flex-1, scrollable):
   - Header bar with page title and live profit chip
@@ -511,11 +533,26 @@ const filteredQuotes = useMemo(
 
 **Use `memo()` for expensive renders:**
 ```tsx
-export const QuoteCalculator = memo(({ loading, onCalculate, children }: Props) => {
+export const QuoteCalculator = memo(({ loading, onCalculate, statusBanner, children }: Props) => {
   // Won't re-render unless props change
-  return <div>{children}</div>;
+  return <div>{statusBanner}{children}</div>;
 });
 ```
+
+### Sync Feedback Components
+
+**Files:**
+
+- [frontend/src/components/shared/SyncStatusBanner.tsx](../frontend/src/components/shared/SyncStatusBanner.tsx)
+- [frontend/src/components/shared/ConflictResolutionModal.tsx](../frontend/src/components/shared/ConflictResolutionModal.tsx)
+- [frontend/src/components/quotes/SavedQuotesTable.tsx](../frontend/src/components/quotes/SavedQuotesTable.tsx)
+
+**Patterns now in use:**
+
+- `SyncStatusBanner` is page-level UI for queue visibility. `Index.tsx` and `SavedQuotes.tsx` both render it with `useSyncStatus()` and expose `Sync now` / `Resolve conflicts` actions.
+- `ConflictResolutionModal` is app-shell level UI. `App.tsx` owns the modal open state via `useSyncStatus()` so conflict resolution is not tied to a single route.
+- `SavedQuotesTable` shows a per-quote sync badge (`Local only`, `Queued`, `Conflict`, `Retry needed`, `Synced`) so the user can tell whether a row is still local or already reconciled.
+- `QuoteCalculator` exposes an optional `statusBanner` slot so later roadmap phases can surface cross-cutting notices without changing the internal field layout again.
 
 ### 3. Code Splitting (Vite)
 **Manual chunk definition** in `vite.config.ts`:

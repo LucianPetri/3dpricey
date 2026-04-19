@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, FileSpreadsheet, Edit, Eye, Database, AlertTriangle, Copy, Printer, Search } from "lucide-react";
+import { Trash2, FileSpreadsheet, Edit, Eye, Database, AlertTriangle, Copy, Printer, Search, PenLine } from "lucide-react";
 import { PrintJobDialog } from "@/components/print-management/PrintJobDialog";
 import { QuoteData } from "@/types/quote";
 import { BambuDevice, PrinterConnection, PrintOptions } from "@/types/printer";
@@ -30,6 +30,7 @@ interface SavedQuotesTableProps {
   onDeleteQuote: (id: string) => void;
   onUpdateNotes: (id: string, notes: string) => void;
   onDuplicateQuote?: (quote: QuoteData) => void;
+  onEditQuote?: (quote: QuoteData) => void;
 }
 
 // Status helper functions
@@ -67,7 +68,27 @@ const getPriorityStyle = (priority?: string) => {
   }
 };
 
-const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplicateQuote }: SavedQuotesTableProps) => {
+const getSyncStatusLabel = (status?: QuoteData['syncStatus']) => {
+  switch (status) {
+    case 'SYNCED': return 'Synced';
+    case 'PENDING_SYNC': return 'Queued';
+    case 'CONFLICT': return 'Conflict';
+    case 'SYNC_FAILED': return 'Retry needed';
+    default: return 'Local only';
+  }
+};
+
+const getSyncStatusStyle = (status?: QuoteData['syncStatus']) => {
+  switch (status) {
+    case 'SYNCED': return 'bg-emerald-100 text-emerald-700';
+    case 'PENDING_SYNC': return 'bg-cyan-100 text-cyan-700';
+    case 'CONFLICT': return 'bg-amber-100 text-amber-700';
+    case 'SYNC_FAILED': return 'bg-red-100 text-red-700';
+    default: return 'bg-slate-100 text-slate-600';
+  }
+};
+
+const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplicateQuote, onEditQuote }: SavedQuotesTableProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
   const [viewingQuote, setViewingQuote] = useState<QuoteData | null>(null);
@@ -284,6 +305,7 @@ const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplica
                 <TableHead className="font-semibold text-foreground">Status</TableHead>
                 <TableHead className="font-semibold text-foreground">Priority</TableHead>
                 <TableHead className="font-semibold text-foreground">Due Date</TableHead>
+                <TableHead className="font-semibold text-foreground">Sync</TableHead>
                 <TableHead className="text-right font-semibold text-foreground">Total ({currency.symbol})</TableHead>
                 <TableHead className="font-semibold text-foreground">Notes</TableHead>
                 <TableHead className="w-36 font-semibold text-foreground">Actions</TableHead>
@@ -318,6 +340,11 @@ const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplica
                       <TableCell className="text-sm text-muted-foreground">
                         {quote.dueDate ? new Date(quote.dueDate).toLocaleDateString() : "-"}
                       </TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${getSyncStatusStyle(quote.syncStatus)}`}>
+                          {getSyncStatusLabel(quote.syncStatus)}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-right font-bold text-foreground tabular-nums">
                         {formatPrice(quote.totalPrice)}
                       </TableCell>
@@ -346,6 +373,18 @@ const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplica
                               title="Duplicate quote"
                             >
                               <Copy className="w-4 h-4" />
+                            </Button>
+                          )}
+
+                          {onEditQuote && quote.printType !== 'Resin' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => onEditQuote(quote)}
+                              className="text-muted-foreground hover:text-cyan-600 hover:bg-cyan-600/10 h-8 w-8"
+                              title="Open in calculator"
+                            >
+                              <PenLine className="w-4 h-4" />
                             </Button>
                           )}
 
@@ -388,7 +427,7 @@ const SavedQuotesTable = memo(({ quotes, onDeleteQuote, onUpdateNotes, onDuplica
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={11} className="h-24 text-center">
+                  <TableCell colSpan={12} className="h-24 text-center">
                     <div className="flex flex-col items-center justify-center text-muted-foreground">
                       <Search className="w-8 h-8 mb-2 opacity-20" />
                       <p>No quotes match your search filters.</p>
