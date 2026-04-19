@@ -115,7 +115,8 @@ Verify all containers are running:
 docker ps | grep 3dpricey
 ```
 
-Should see 18 containers total (6 per environment × 3 envs).
+Should see 18 containers total (6 per environment × 3 envs, including the
+Newt ingress agent).
 
 ## Step 6: Configure GitLab CI/CD Variables
 
