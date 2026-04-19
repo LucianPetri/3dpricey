@@ -26,6 +26,7 @@ import { getEmployees, getLaborItems, getMachines, getFdmCalculatorDraft, saveFd
 import { useStoredGcodes } from "@/hooks/useStoredGcodes";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { HexColorSwatch } from "@/components/shared/HexColorSwatch";
 import { getSpools } from "@/lib/core/sessionStorage";
 
 interface FDMCalculatorProps {
