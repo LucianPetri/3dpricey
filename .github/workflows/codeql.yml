@@ -17,10 +17,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  CODE_SCANNING_ENABLED: ${{ vars.CODE_SCANNING_ENABLED || 'false' }}
+
 jobs:
   analyze:
     name: Analyze JavaScript and TypeScript
     runs-on: ubuntu-latest
+    if: env.CODE_SCANNING_ENABLED == 'true'
     permissions:
       actions: read
       contents: read
@@ -41,3 +45,15 @@ jobs:
 
       - name: Analyze
         uses: github/codeql-action/analyze@e753c89edeb6ea2333858f2dd740f46591744926 # v4.31.1
+
+  codeql_disabled_notice:
+    name: CodeQL Disabled
+    runs-on: ubuntu-latest
+    if: env.CODE_SCANNING_ENABLED != 'true'
+    permissions:
+      contents: read
+    steps:
+      - name: Explain why CodeQL is skipped
+        run: |
+          echo "CodeQL is skipped because repository variable CODE_SCANNING_ENABLED is not set to true."
+          echo "Enable GitHub code scanning in the repository settings, then set CODE_SCANNING_ENABLED=true to activate this workflow."
