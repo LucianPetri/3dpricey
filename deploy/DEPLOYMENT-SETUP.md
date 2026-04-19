@@ -89,19 +89,22 @@ NEWT_SECRET=dev_newt_secret_from_pangolin
 PANGOLIN_BLUEPRINT_FILE=/blueprints/3dpricey-dev.yml
 ```
 
-Repeat for staging and prod, updating `DEV_` → `STAGING_` → `PROD_` and URLs.
+Repeat for staging and prod, updating `APP_ENV`, credentials, Newt values, and
+`PANGOLIN_BLUEPRINT_FILE` for each environment.
 
 ## Step 5: Start All 3 Environments
 
 ```bash
 # Dev
-cd /path/to/3dpricey
+cd /opt/3dpricey-dev
 docker compose --env-file deploy/.env.dev -f deploy/docker-compose.deploy.yml up -d
 
 # Staging
+cd /opt/3dpricey-staging
 docker compose --env-file deploy/.env.staging -f deploy/docker-compose.deploy.yml up -d
 
 # Prod
+cd /opt/3dpricey-prod
 docker compose --env-file deploy/.env.prod -f deploy/docker-compose.deploy.yml up -d
 ```
 
@@ -111,7 +114,7 @@ Verify all containers are running:
 docker ps | grep 3dpricey
 ```
 
-Should see 15 containers total (5 per environment × 3 envs).
+Should see 18 containers total (6 per environment × 3 envs).
 
 ## Step 6: Configure GitLab CI/CD Variables
 
@@ -182,7 +185,7 @@ ping git.xaiko.cloud
 Check if all images can be pulled:
 
 ```bash
-cd /path/to/3dpricey
+cd /opt/3dpricey-dev
 docker compose --env-file deploy/.env.dev -f deploy/docker-compose.deploy.yml pull
 ```
 
@@ -221,7 +224,7 @@ To stop all environments:
 ```bash
 for env in dev staging prod; do
   cd /opt/3dpricey-$env
-  docker compose -f docker-compose.deploy.yml down
+  docker compose --env-file deploy/.env.$env -f deploy/docker-compose.deploy.yml down
 done
 ```
 
@@ -230,6 +233,6 @@ To remove volumes (WARNING: deletes data):
 ```bash
 for env in dev staging prod; do
   cd /opt/3dpricey-$env
-  docker compose -f docker-compose.deploy.yml down -v
+  docker compose --env-file deploy/.env.$env -f deploy/docker-compose.deploy.yml down -v
 done
 ```
