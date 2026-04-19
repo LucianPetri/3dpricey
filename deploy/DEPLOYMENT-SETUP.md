@@ -75,7 +75,7 @@ Example `deploy/.env.dev`:
 
 ```bash
 APP_ENV=dev
-GHCR_OWNER=lucianpetri
+GHCR_OWNER=your_github_username_or_org
 IMAGE_TAG=v2.0.0
 DB_USER=postgres
 DB_PASSWORD=dev_secure_password_here
