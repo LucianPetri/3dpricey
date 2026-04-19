@@ -79,7 +79,8 @@ GHCR_OWNER=lucianpetri
 IMAGE_TAG=v2.0.0
 DB_USER=postgres
 DB_PASSWORD=dev_secure_password_here
-JWT_SECRET=dev_jwt_secret_min_32_chars_long_here_12345
+# Use at least 32 random bytes for production JWT secrets.
+JWT_SECRET=dev_jwt_secret_here_change_me
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET=3dpricey
