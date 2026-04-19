@@ -9,7 +9,7 @@ services:
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME:-3dpricey}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,10 +53,11 @@ services:
       dockerfile: Dockerfile
     container_name: 3dpricey-backend
     environment:
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-3dpricey}
       JWT_SECRET: ${JWT_SECRET}
       NODE_ENV: production
       API_PORT: 3001
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
       REDIS_URL: redis://redis:6379
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
@@ -83,12 +84,14 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://3dpricey-backend:3001/api
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api}
     container_name: 3dpricey-frontend
     depends_on:
       - backend
+    ports:
+      - "8080:80"
     environment:
-      VITE_API_URL: http://3dpricey-backend:3001/api
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api}
     networks:
       - pangolin_default
     restart: unless-stopped

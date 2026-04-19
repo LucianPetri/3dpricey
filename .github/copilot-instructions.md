@@ -133,12 +133,14 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 **7. Backend & Deployment**
 - **Backend:** Express + Prisma in [backend/](../backend/)
 - **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml) (local dev builds) and [deploy/docker-compose.deploy.yml](../deploy/docker-compose.deploy.yml) (deployment via published GHCR frontend/backend images)
+- **Runtime URL wiring:** Local compose must build the frontend with a browser-reachable `VITE_API_URL` such as `http://localhost:3001/api`, while deployed images are expected to use a public path like `/api` behind ingress. Backend CORS must be driven by `FRONTEND_URL` in both local and deployed compose files.
 - **CI/CD:** GitHub Actions pipeline with `prepare`, `tests`, `build`, and `deploy` jobs in [ci-cd.yml](../.github/workflows/ci-cd.yml)
 - **Security scanning:** Dependency review runs on pull requests through the GitHub Actions pipeline in [ci-cd.yml](../.github/workflows/ci-cd.yml).
 - **Action runtime:** Workflows opt into `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` and pin current action SHAs to stay ahead of the GitHub-hosted runner Node 20 deprecation.
 - **Container registry:** Frontend and backend images publish to `ghcr.io/<owner>/3dpricey-frontend` and `ghcr.io/<owner>/3dpricey-backend`
 - **Ingress:** Pangolin Newt with blueprints in [deploy/blueprints/](../deploy/blueprints/)
 - **Env per site:** Deployment hosts can set `GHCR_OWNER` and `IMAGE_TAG` alongside the existing app secrets to pull the desired published image version, and can bootstrap values from [deploy/.env.example](../deploy/.env.example) without requiring a committed `.env`
+- **Required local compose env:** `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, `FRONTEND_URL`, and optionally `VITE_API_URL` when the browser should use a non-default API origin.
 - **Setup Guide:** [deploy/DEPLOYMENT-SETUP.md](../deploy/DEPLOYMENT-SETUP.md) - deployment server bootstrap plus GitHub repository variables and secrets
 
 ### CI/CD Pipeline Flow
