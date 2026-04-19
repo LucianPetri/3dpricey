@@ -134,7 +134,7 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 - **Backend:** Express + Prisma in [backend/](../backend/)
 - **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml) (local dev builds) and [deploy/docker-compose.deploy.yml](../deploy/docker-compose.deploy.yml) (deployment via published GHCR frontend/backend images)
 - **CI/CD:** GitHub Actions pipeline with `prepare`, `tests`, `build`, and `deploy` jobs in [ci-cd.yml](../.github/workflows/ci-cd.yml)
-- **Security scanning:** CodeQL workflow in [codeql.yml](../.github/workflows/codeql.yml) plus dependency review on pull requests
+- **Security scanning:** CodeQL workflow in [codeql.yml](../.github/workflows/codeql.yml) with explicit `actions: read` permissions for CodeQL status reporting, plus dependency review on pull requests
 - **Container registry:** Frontend and backend images publish to `ghcr.io/<owner>/3dpricey-frontend` and `ghcr.io/<owner>/3dpricey-backend`
 - **Ingress:** Pangolin Newt with blueprints in [deploy/blueprints/](../deploy/blueprints/)
 - **Env per site:** Deployment hosts can set `GHCR_OWNER` and `IMAGE_TAG` alongside the existing app secrets to pull the desired published image version
@@ -146,6 +146,7 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
   - Restores npm cache for both workspaces
   - Validates lockfile-based installs with `npm ci --ignore-scripts`
   - Runs dependency review on pull requests
+  - The workflow trigger explicitly includes `push.branches: [main]` so post-merge CI and deploy gating run after direct pushes and merges to the default branch
 
 2. **tests**
   - Frontend: `npm ci`, `npm run lint`, optional `npm run test --if-present`, and optional Playwright execution when a config exists
