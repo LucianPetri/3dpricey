@@ -35,8 +35,8 @@ RUN apk add --no-cache openssl openssl-dev
 # Copy package files
 COPY package.json package-lock.json ./
 
-# Install production dependencies only
-RUN npm ci --omit=dev
+# Install runtime dependencies plus Prisma CLI used by the entrypoint
+RUN npm ci --omit=dev && npm install --no-save prisma@5.20.0
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist

@@ -132,33 +132,41 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 
 **7. Backend & Deployment**
 - **Backend:** Express + Prisma in [backend/](../backend/)
-- **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml) (local dev) and [deploy/docker-compose.deploy.yml](../deploy/docker-compose.deploy.yml) (deploy/dev with local frontend/backend builds)
-- **CI/CD:** GitLab pipeline with 2 stages: validate (lint frontend) + deploy (SSH to servers)
-- **Pipeline:** [.gitlab-ci.yml](../.gitlab-ci.yml) - runs on `merge_request_event`, `dev`, `staging`, `main` branches
+- **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml) (local dev builds) and [deploy/docker-compose.deploy.yml](../deploy/docker-compose.deploy.yml) (deployment via published GHCR frontend/backend images)
+- **CI/CD:** GitHub Actions pipeline with `prepare`, `tests`, `build`, and `deploy` jobs in [ci-cd.yml](../.github/workflows/ci-cd.yml)
+- **Security scanning:** CodeQL workflow in [codeql.yml](../.github/workflows/codeql.yml) plus dependency review on pull requests
+- **Container registry:** Frontend and backend images publish to `ghcr.io/<owner>/3dpricey-frontend` and `ghcr.io/<owner>/3dpricey-backend`
 - **Ingress:** Pangolin Newt with blueprints in [deploy/blueprints/](../deploy/blueprints/)
-- **Env per site:** CI writes a per-environment `.env.$APP_ENV` on each host with Newt ID/secret and blueprint path
-- **Setup Guide:** [deploy/DEPLOYMENT-SETUP.md](../deploy/DEPLOYMENT-SETUP.md) - SSH keypair generation and GitLab variables
+- **Env per site:** Deployment hosts can set `GHCR_OWNER` and `IMAGE_TAG` alongside the existing app secrets to pull the desired published image version
+- **Setup Guide:** [deploy/DEPLOYMENT-SETUP.md](../deploy/DEPLOYMENT-SETUP.md) - deployment server bootstrap plus GitHub repository variables and secrets
 
 ### CI/CD Pipeline Flow
 
-1. **validate_code** (runs on all branches)
-   - Image: `node:20-alpine`
-   - Runs `npm ci && npm run lint` in frontend/
-   - Fails if ESLint errors exist
+1. **prepare** (runs on pull requests, pushes to `main`, version tags, and manual dispatch)
+  - Restores npm cache for both workspaces
+  - Validates lockfile-based installs with `npm ci --ignore-scripts`
+  - Runs dependency review on pull requests
 
-2. **deploy_dev/staging/prod** (runs only on `dev`, `staging`, `main` branches)
-   - Image: `alpine:3.19`
-   - SSH to deployment server using private key
-   - Clone latest code from GitLab
-   - Generate `.env.$APP_ENV` with secrets
-   - Run `docker compose --env-file .env.$APP_ENV -f docker-compose.deploy.yml build && up -d`
+2. **tests**
+  - Frontend: `npm ci`, `npm run lint`, optional `npm run test --if-present`, and optional Playwright execution when a config exists
+  - Backend: `npm ci` and `npm test`
+
+3. **build**
+  - Frontend: production Vite build with `VITE_API_URL=/api`
+  - Backend: TypeScript compile via `npm run build`
+  - Uploads short-lived build artifacts for inspection
+
+4. **deploy**
+  - Builds Docker images with the existing [frontend/Dockerfile](../frontend/Dockerfile) and [backend/Dockerfile](../backend/Dockerfile)
+  - Publishes immutable tags plus `latest` on the default branch to GHCR
+  - Deployment compose pulls `ghcr.io/<owner>/3dpricey-frontend:${IMAGE_TAG:-latest}` and `ghcr.io/<owner>/3dpricey-backend:${IMAGE_TAG:-latest}`
 
 **SSH Access Pattern:**
 ```
-GitLab Runner (Alpine) 
-  --SSH port 22--> Deployment Server 
-    --Docker CLI via socket--> Docker Daemon 
-      --compose--> Services (postgres, redis, minio, backend, frontend, newt)
+GitHub Actions Runner
+  --GHCR push--> Container Registry
+   --docker compose pull/up--> Deployment Server
+    --compose--> Services (postgres, redis, minio, backend, frontend, newt)
 ```
 
 **8. Pages & Routing** ([src/pages/](src/pages/), [HashRouter](src/App.tsx))

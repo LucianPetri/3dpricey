@@ -61,9 +61,8 @@ services:
           - minio
 
   backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
+    image: ghcr.io/${GHCR_OWNER:-lucianpetri}/3dpricey-backend:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: 3dpricey-${APP_ENV}-backend
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/3dpricey
@@ -90,18 +89,13 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL}
+    image: ghcr.io/${GHCR_OWNER:-lucianpetri}/3dpricey-frontend:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: 3dpricey-${APP_ENV}-frontend
     ports:
       - "8080:80"
     depends_on:
       - backend
-    environment:
-      VITE_API_URL: ${VITE_API_URL}
     networks:
       - 3dpricey-network
     restart: unless-stopped
