@@ -16,7 +16,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      3dpricey-network:
+      pangolin-default:
         aliases:
           - postgres
 
@@ -34,7 +34,7 @@ services:
       retries: 5
     command: redis-server --appendonly yes
     networks:
-      3dpricey-network:
+      pangolin-default:
         aliases:
           - redis
 
@@ -56,7 +56,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      3dpricey-network:
+      pangolin-default:
         aliases:
           - minio
 
@@ -85,7 +85,7 @@ services:
       minio:
         condition: service_healthy
     networks:
-      - 3dpricey-network
+      - pangolin-default
     restart: unless-stopped
 
   frontend:
@@ -97,21 +97,7 @@ services:
     depends_on:
       - backend
     networks:
-      - 3dpricey-network
-    restart: unless-stopped
-
-  newt:
-    image: fosrl/newt:latest
-    container_name: 3dpricey-${APP_ENV}-newt
-    environment:
-      PANGOLIN_ENDPOINT: ${PANGOLIN_ENDPOINT:?PANGOLIN_ENDPOINT is required}
-      NEWT_ID: ${NEWT_ID:?NEWT_ID is required}
-      NEWT_SECRET: ${NEWT_SECRET:?NEWT_SECRET is required}
-    command: ["newt", "--blueprint-file", "${PANGOLIN_BLUEPRINT_FILE:?PANGOLIN_BLUEPRINT_FILE is required}"]
-    volumes:
-      - ./deploy/blueprints:/blueprints:ro
-    networks:
-      - 3dpricey-network
+      - pangolin-default
     restart: unless-stopped
 
 volumes:
@@ -123,5 +109,5 @@ volumes:
     driver: local
 
 networks:
-  3dpricey-network:
-    driver: bridge
+  pangolin-default:
+    external: true
