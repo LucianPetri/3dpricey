@@ -51,37 +51,38 @@ for env in dev staging prod; do
 done
 ```
 
-## Step 3: Copy docker-compose.deploy.yml
+## Step 3: Prepare the deploy env template
 
 ```bash
-for env in dev staging prod; do
-  cp docker-compose.deploy.yml /opt/3dpricey-$env/
-done
+cp deploy/.env.example deploy/.env
 ```
 
-## Step 4: Create .env Files for Each Environment
+Fill in `deploy/.env` before running Docker Compose. If your deployment platform imports
+`deploy/docker-compose.deploy.yml` directly from the repository, this `deploy/.env` file is the
+default companion file it should read.
 
-Create `/opt/3dpricey-dev/.env.dev`:
+## Step 4: Create per-environment env files when needed
+
+For manual multi-environment deployments, copy the template for each target environment:
+
+```bash
+cp deploy/.env.example deploy/.env.dev
+cp deploy/.env.example deploy/.env.staging
+cp deploy/.env.example deploy/.env.prod
+```
+
+Example `deploy/.env.dev`:
 
 ```bash
 APP_ENV=dev
+GHCR_OWNER=lucianpetri
+IMAGE_TAG=latest
 DB_USER=postgres
 DB_PASSWORD=dev_secure_password_here
 JWT_SECRET=dev_jwt_secret_min_32_chars_long_here_12345
-JWT_EXPIRY=7d
-REFRESH_TOKEN_EXPIRY=30d
-API_PORT=3001
-NODE_ENV=production
-FRONTEND_URL=https://dev.printel.ro
-REDIS_URL=redis://redis:6379
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
-MINIO_ENDPOINT=minio:9000
 MINIO_BUCKET=3dpricey
-MINIO_REGION=us-east-1
-MINIO_PUBLIC_URL=https://dev.printel.ro/storage
-MINIO_USE_SSL=false
-VITE_API_URL=https://dev.printel.ro/api
 PANGOLIN_ENDPOINT=https://app.pangolin.net
 NEWT_ID=dev_newt_id_from_pangolin
 NEWT_SECRET=dev_newt_secret_from_pangolin
@@ -94,16 +95,14 @@ Repeat for staging and prod, updating `DEV_` → `STAGING_` → `PROD_` and URLs
 
 ```bash
 # Dev
-cd /opt/3dpricey-dev
-docker compose --env-file .env.dev -f docker-compose.deploy.yml up -d
+cd /path/to/3dpricey
+docker compose --env-file deploy/.env.dev -f deploy/docker-compose.deploy.yml up -d
 
 # Staging
-cd /opt/3dpricey-staging
-docker compose --env-file .env.staging -f docker-compose.deploy.yml up -d
+docker compose --env-file deploy/.env.staging -f deploy/docker-compose.deploy.yml up -d
 
 # Prod
-cd /opt/3dpricey-prod
-docker compose --env-file .env.prod -f docker-compose.deploy.yml up -d
+docker compose --env-file deploy/.env.prod -f deploy/docker-compose.deploy.yml up -d
 ```
 
 Verify all containers are running:
@@ -183,8 +182,8 @@ ping git.xaiko.cloud
 Check if all images can be pulled:
 
 ```bash
-cd /opt/3dpricey-dev
-docker compose --env-file .env.dev -f docker-compose.deploy.yml pull
+cd /path/to/3dpricey
+docker compose --env-file deploy/.env.dev -f deploy/docker-compose.deploy.yml pull
 ```
 
 ### Volumes/Permissions Issues
@@ -234,4 +233,3 @@ for env in dev staging prod; do
   docker compose -f docker-compose.deploy.yml down -v
 done
 ```
-

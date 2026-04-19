@@ -138,7 +138,7 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 - **Action runtime:** Workflows opt into `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` and pin current action SHAs to stay ahead of the GitHub-hosted runner Node 20 deprecation.
 - **Container registry:** Frontend and backend images publish to `ghcr.io/<owner>/3dpricey-frontend` and `ghcr.io/<owner>/3dpricey-backend`
 - **Ingress:** Pangolin Newt with blueprints in [deploy/blueprints/](../deploy/blueprints/)
-- **Env per site:** Deployment hosts can set `GHCR_OWNER` and `IMAGE_TAG` alongside the existing app secrets to pull the desired published image version
+- **Env per site:** Deployment hosts can set `GHCR_OWNER` and `IMAGE_TAG` alongside the existing app secrets to pull the desired published image version, and can bootstrap values from [deploy/.env.example](../deploy/.env.example) without requiring a committed `.env`
 - **Setup Guide:** [deploy/DEPLOYMENT-SETUP.md](../deploy/DEPLOYMENT-SETUP.md) - deployment server bootstrap plus GitHub repository variables and secrets
 
 ### CI/CD Pipeline Flow
