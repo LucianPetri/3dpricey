@@ -135,6 +135,7 @@ A **full-stack quote calculator** with offline-first capabilities. Core data per
 - **Docker Compose:** Multi-service stack in [docker-compose.yml](../docker-compose.yml) (local dev builds) and [deploy/docker-compose.deploy.yml](../deploy/docker-compose.deploy.yml) (deployment via published GHCR frontend/backend images)
 - **CI/CD:** GitHub Actions pipeline with `prepare`, `tests`, `build`, and `deploy` jobs in [ci-cd.yml](../.github/workflows/ci-cd.yml)
 - **Security scanning:** CodeQL workflow in [codeql.yml](../.github/workflows/codeql.yml) with explicit `actions: read` permissions for CodeQL status reporting, plus dependency review on pull requests. CodeQL is gated behind the `CODE_SCANNING_ENABLED=true` repository variable so CI does not fail before GitHub code scanning is enabled for the repo.
+- **Action runtime:** Workflows opt into `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` and pin current action SHAs to stay ahead of the GitHub-hosted runner Node 20 deprecation.
 - **Container registry:** Frontend and backend images publish to `ghcr.io/<owner>/3dpricey-frontend` and `ghcr.io/<owner>/3dpricey-backend`
 - **Ingress:** Pangolin Newt with blueprints in [deploy/blueprints/](../deploy/blueprints/)
 - **Env per site:** Deployment hosts can set `GHCR_OWNER` and `IMAGE_TAG` alongside the existing app secrets to pull the desired published image version

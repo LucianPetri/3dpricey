@@ -19,6 +19,7 @@ concurrency:
 
 env:
   CODE_SCANNING_ENABLED: ${{ vars.CODE_SCANNING_ENABLED || 'false' }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   analyze:
@@ -36,15 +37,15 @@ jobs:
           - javascript-typescript
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@e753c89edeb6ea2333858f2dd740f46591744926 # v4.31.1
+        uses: github/codeql-action/init@7fc6561ed893d15cec696e062df840b21db27eb0 # v4.35.2
         with:
           languages: ${{ matrix.language }}
 
       - name: Analyze
-        uses: github/codeql-action/analyze@e753c89edeb6ea2333858f2dd740f46591744926 # v4.31.1
+        uses: github/codeql-action/analyze@7fc6561ed893d15cec696e062df840b21db27eb0 # v4.35.2
 
   codeql_disabled_notice:
     name: CodeQL Disabled

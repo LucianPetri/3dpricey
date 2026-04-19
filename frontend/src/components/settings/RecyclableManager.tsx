@@ -5,7 +5,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -15,11 +14,8 @@ import { getRecyclableColorTotals } from "@/lib/core/sessionStorage";
 import { HexColorSwatch } from "@/components/shared/HexColorSwatch";
 
 const RecyclableManager = () => {
-  const { gcodes, loading } = useStoredGcodes();
-
-  const recyclableData = useMemo(() => {
-    return getRecyclableColorTotals();
-  }, [gcodes]);
+  const { loading } = useStoredGcodes();
+  const recyclableData = getRecyclableColorTotals();
 
   if (loading) {
     return <div className="text-center py-8">Loading recyclable totals...</div>;
