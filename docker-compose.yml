@@ -16,7 +16,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - 3dpricey-network
+      - pangolin-default
 
   redis:
     image: redis:7-alpine
@@ -32,7 +32,7 @@ services:
       retries: 5
     command: redis-server --appendonly yes
     networks:
-      - 3dpricey-network
+      - pangolin-default
 
   minio:
     image: minio/minio:latest
@@ -52,7 +52,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - 3dpricey-network
+      - pangolin-default
 
   backend:
     build:
@@ -82,7 +82,7 @@ services:
     volumes:
       - ./backend/src:/app/src
     networks:
-      - 3dpricey-network
+      - pangolin-default
     restart: unless-stopped
 
   frontend:
@@ -99,23 +99,9 @@ services:
     environment:
       VITE_API_URL: http://localhost:3001/api
     networks:
-      - 3dpricey-network
+      - pangolin-default
     restart: unless-stopped
-
-  newt:
-    image: fosrl/newt:latest
-    container_name: 3dpricey-newt
-    env_file:
-      - ./.env
-    command: ["newt", "--blueprint-file", "${PANGOLIN_BLUEPRINT_FILE}"]
-    volumes:
-      - ./deploy/blueprints:/blueprints:ro
-    profiles:
-      - pangolin
-    networks:
-      - 3dpricey-network
-    restart: unless-stopped
-
+    
 volumes:
   postgres_data:
     driver: local
@@ -125,5 +111,5 @@ volumes:
     driver: local
 
 networks:
-  3dpricey-network:
-    driver: bridge
+  pangolin-default:
+    external: true
