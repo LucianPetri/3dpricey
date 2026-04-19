@@ -51,59 +51,63 @@ for env in dev staging prod; do
 done
 ```
 
-## Step 3: Copy docker-compose.deploy.yml
+## Step 3: Prepare the deploy env template
 
 ```bash
-for env in dev staging prod; do
-  cp docker-compose.deploy.yml /opt/3dpricey-$env/
-done
+cp deploy/.env.example deploy/.env
 ```
 
-## Step 4: Create .env Files for Each Environment
+Fill in `deploy/.env` before running Docker Compose. If your deployment platform imports
+`deploy/docker-compose.deploy.yml` directly from the repository, this `deploy/.env` file is the
+default companion file it should read.
 
-Create `/opt/3dpricey-dev/.env.dev`:
+## Step 4: Create per-environment env files when needed
+
+For manual multi-environment deployments, copy the template for each target environment:
+
+```bash
+cp deploy/.env.example deploy/.env.dev
+cp deploy/.env.example deploy/.env.staging
+cp deploy/.env.example deploy/.env.prod
+```
+
+Example `deploy/.env.dev`:
 
 ```bash
 APP_ENV=dev
+GHCR_OWNER=your_github_username_or_org
+# Use a published GHCR tag from your releases or workflow output.
+IMAGE_TAG=your_image_tag_here
 DB_USER=postgres
 DB_PASSWORD=dev_secure_password_here
-JWT_SECRET=dev_jwt_secret_min_32_chars_long_here_12345
-JWT_EXPIRY=7d
-REFRESH_TOKEN_EXPIRY=30d
-API_PORT=3001
-NODE_ENV=production
-FRONTEND_URL=https://dev.printel.ro
-REDIS_URL=redis://redis:6379
+# Generate with: openssl rand -base64 32
+JWT_SECRET=J7p3z6wG1m1X2d1H1m9g9z7sK0uR4yL8bF2qN6vT3c=
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
-MINIO_ENDPOINT=minio:9000
 MINIO_BUCKET=3dpricey
-MINIO_REGION=us-east-1
-MINIO_PUBLIC_URL=https://dev.printel.ro/storage
-MINIO_USE_SSL=false
-VITE_API_URL=https://dev.printel.ro/api
 PANGOLIN_ENDPOINT=https://app.pangolin.net
 NEWT_ID=dev_newt_id_from_pangolin
 NEWT_SECRET=dev_newt_secret_from_pangolin
 PANGOLIN_BLUEPRINT_FILE=/blueprints/3dpricey-dev.yml
 ```
 
-Repeat for staging and prod, updating `DEV_` → `STAGING_` → `PROD_` and URLs.
+Repeat for staging and prod, updating `APP_ENV`, credentials, Newt values, and
+`PANGOLIN_BLUEPRINT_FILE` for each environment.
 
 ## Step 5: Start All 3 Environments
 
 ```bash
 # Dev
 cd /opt/3dpricey-dev
-docker compose --env-file .env.dev -f docker-compose.deploy.yml up -d
+docker compose --env-file deploy/.env.dev -f deploy/docker-compose.deploy.yml up -d
 
 # Staging
 cd /opt/3dpricey-staging
-docker compose --env-file .env.staging -f docker-compose.deploy.yml up -d
+docker compose --env-file deploy/.env.staging -f deploy/docker-compose.deploy.yml up -d
 
 # Prod
 cd /opt/3dpricey-prod
-docker compose --env-file .env.prod -f docker-compose.deploy.yml up -d
+docker compose --env-file deploy/.env.prod -f deploy/docker-compose.deploy.yml up -d
 ```
 
 Verify all containers are running:
@@ -112,7 +116,8 @@ Verify all containers are running:
 docker ps | grep 3dpricey
 ```
 
-Should see 15 containers total (5 per environment × 3 envs).
+Should see 18 containers total (6 per environment × 3 envs, including the
+Newt ingress agent).
 
 ## Step 6: Configure GitLab CI/CD Variables
 
@@ -184,7 +189,7 @@ Check if all images can be pulled:
 
 ```bash
 cd /opt/3dpricey-dev
-docker compose --env-file .env.dev -f docker-compose.deploy.yml pull
+docker compose --env-file deploy/.env.dev -f deploy/docker-compose.deploy.yml pull
 ```
 
 ### Volumes/Permissions Issues
@@ -222,7 +227,7 @@ To stop all environments:
 ```bash
 for env in dev staging prod; do
   cd /opt/3dpricey-$env
-  docker compose -f docker-compose.deploy.yml down
+  docker compose --env-file deploy/.env.$env -f deploy/docker-compose.deploy.yml down
 done
 ```
 
@@ -231,7 +236,6 @@ To remove volumes (WARNING: deletes data):
 ```bash
 for env in dev staging prod; do
   cd /opt/3dpricey-$env
-  docker compose -f docker-compose.deploy.yml down -v
+  docker compose --env-file deploy/.env.$env -f deploy/docker-compose.deploy.yml down -v
 done
 ```
-

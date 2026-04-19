@@ -103,9 +103,11 @@ services:
   newt:
     image: fosrl/newt:latest
     container_name: 3dpricey-${APP_ENV}-newt
-    env_file:
-      - ./.env
-    command: ["newt", "--blueprint-file", "${PANGOLIN_BLUEPRINT_FILE}"]
+    environment:
+      PANGOLIN_ENDPOINT: ${PANGOLIN_ENDPOINT:?PANGOLIN_ENDPOINT is required}
+      NEWT_ID: ${NEWT_ID:?NEWT_ID is required}
+      NEWT_SECRET: ${NEWT_SECRET:?NEWT_SECRET is required}
+    command: ["newt", "--blueprint-file", "${PANGOLIN_BLUEPRINT_FILE:?PANGOLIN_BLUEPRINT_FILE is required}"]
     volumes:
       - ./deploy/blueprints:/blueprints:ro
     networks:
