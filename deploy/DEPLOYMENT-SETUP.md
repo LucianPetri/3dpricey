@@ -76,7 +76,7 @@ Example `deploy/.env.dev`:
 ```bash
 APP_ENV=dev
 GHCR_OWNER=lucianpetri
-IMAGE_TAG=latest
+IMAGE_TAG=v2.0.0
 DB_USER=postgres
 DB_PASSWORD=dev_secure_password_here
 JWT_SECRET=dev_jwt_secret_min_32_chars_long_here_12345
