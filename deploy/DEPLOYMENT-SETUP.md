@@ -76,11 +76,12 @@ Example `deploy/.env.dev`:
 ```bash
 APP_ENV=dev
 GHCR_OWNER=your_github_username_or_org
-IMAGE_TAG=v2.0.0
+# Use a published GHCR tag from your releases or workflow output.
+IMAGE_TAG=your_image_tag_here
 DB_USER=postgres
 DB_PASSWORD=dev_secure_password_here
-# Use at least 32 random bytes for production JWT secrets.
-JWT_SECRET=dev_jwt_secret_here_change_me
+# Generate with: openssl rand -base64 32
+JWT_SECRET=J7p3z6wG1m1X2d1H1m9g9z7sK0uR4yL8bF2qN6vT3c=
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET=3dpricey
